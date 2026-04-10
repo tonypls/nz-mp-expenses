@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
 import { PARTY_COLORS } from "../../lib/types";
@@ -19,14 +19,26 @@ export default function PartyBarChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [mode, setMode] = useState<"perMember" | "total">("perMember");
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const chartData = useMemo(() => {
     const partyData = new Map<
       string,
-      { total: number; memberCount: number; perCapita: number }
+      { total: number; memberCount: number; quarterRecords: number; perCapita: number }
     >();
 
-    // Get unique member-quarter combos per party for proper per-capita
     const membersByParty = new Map<string, Set<string>>();
 
     for (const r of records) {
@@ -37,37 +49,46 @@ export default function PartyBarChart({
       );
 
       if (!partyData.has(r.party)) {
-        partyData.set(r.party, { total: 0, memberCount: 0, perCapita: 0 });
+        partyData.set(r.party, { total: 0, memberCount: 0, quarterRecords: 0, perCapita: 0 });
         membersByParty.set(r.party, new Set());
       }
-      partyData.get(r.party)!.total += sum;
+      const d = partyData.get(r.party)!;
+      d.total += sum;
+      d.quarterRecords += 1;
       membersByParty.get(r.party)!.add(r.name);
     }
 
-    // Calculate per-capita
+    // perCapita = avg spend per member per quarter
     for (const [party, data] of partyData) {
       data.memberCount = membersByParty.get(party)?.size || 1;
-      data.perCapita = data.total / data.memberCount;
+      data.perCapita = data.total / (data.quarterRecords || 1);
     }
 
     return [...partyData.entries()]
-      .map(([party, data]) => ({ party, ...data }))
-      .sort((a, b) => b.perCapita - a.perCapita);
+      .map(([party, data]) => ({ party, ...data }));
   }, [records, categories, parties]);
 
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || chartData.length === 0)
+    if (!svgRef.current || !containerRef.current || chartData.length === 0 || !containerWidth)
       return;
 
-    const container = containerRef.current;
-    const width = container.clientWidth;
-    const barHeight = 32;
-    const gap = 6;
-    const height = Math.max(
-      200,
-      chartData.length * (barHeight + gap) + 40
+    const sorted = [...chartData].sort((a, b) =>
+      mode === "total" ? b.total - a.total : b.perCapita - a.perCapita
     );
-    const margin = { top: 8, right: 80, bottom: 8, left: 110 };
+    const getValue = (d: (typeof sorted)[0]) =>
+      mode === "total" ? d.total : d.perCapita;
+
+    const width = containerWidth;
+    const isMobile = width < 500;
+    const barHeight = isMobile ? 26 : 32;
+    const gap = 6;
+    const height = Math.max(200, sorted.length * (barHeight + gap) + 40);
+    const margin = {
+      top: 8,
+      right: isMobile ? 56 : 80,
+      bottom: 8,
+      left: isMobile ? 96 : 110,
+    };
     const innerWidth = width - margin.left - margin.right;
 
     const svg = d3
@@ -82,7 +103,7 @@ export default function PartyBarChart({
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const maxVal = d3.max(chartData, (d) => d.perCapita) || 1;
+    const maxVal = d3.max(sorted, getValue) || 1;
 
     const x = d3
       .scaleLinear()
@@ -91,15 +112,15 @@ export default function PartyBarChart({
 
     const y = d3
       .scaleBand<string>()
-      .domain(chartData.map((d) => d.party))
-      .range([0, chartData.length * (barHeight + gap)])
+      .domain(sorted.map((d) => d.party))
+      .range([0, sorted.length * (barHeight + gap)])
       .padding(0.15);
 
     const tooltip = d3.select(tooltipRef.current);
 
     // Bars
     g.selectAll(".bar")
-      .data(chartData)
+      .data(sorted)
       .join("rect")
       .attr("class", "bar")
       .attr("x", 0)
@@ -110,38 +131,43 @@ export default function PartyBarChart({
       .attr("opacity", 0.85)
       .attr("width", 0)
       .transition()
-      .duration(700)
+      .duration(500)
       .ease(d3.easeCubicOut)
-      .attr("width", (d) => x(d.perCapita));
+      .attr("width", (d) => x(getValue(d)));
 
-    // Party labels
+    // Party labels — truncate if narrow
+    const maxLabelChars = isMobile ? 15 : 20;
     g.selectAll(".party-label")
-      .data(chartData)
+      .data(sorted)
       .join("text")
       .attr("x", -8)
       .attr("y", (d) => (y(d.party) || 0) + y.bandwidth() / 2)
       .attr("text-anchor", "end")
       .attr("dominant-baseline", "middle")
       .attr("fill", "var(--text-secondary)")
-      .style("font-size", "12px")
+      .style("font-size", isMobile ? "11px" : "12px")
       .style("font-weight", "500")
-      .text((d) => d.party);
+      .text((d) =>
+        d.party.length > maxLabelChars
+          ? d.party.slice(0, maxLabelChars - 1) + "…"
+          : d.party
+      );
 
     // Value labels
     g.selectAll(".value-label")
-      .data(chartData)
+      .data(sorted)
       .join("text")
-      .attr("x", (d) => x(d.perCapita) + 8)
+      .attr("x", (d) => x(getValue(d)) + 6)
       .attr("y", (d) => (y(d.party) || 0) + y.bandwidth() / 2)
       .attr("dominant-baseline", "middle")
       .attr("fill", "var(--text-muted)")
-      .style("font-size", "11px")
+      .style("font-size", isMobile ? "10px" : "11px")
       .style("font-family", "var(--font-geist-mono), monospace")
-      .text((d) => `$${d3.format(",.0f")(d.perCapita)}`);
+      .text((d) => `$${d3.format(".2s")(getValue(d))}`);
 
     // Hover
     g.selectAll(".bar-hover")
-      .data(chartData)
+      .data(sorted)
       .join("rect")
       .attr("x", -margin.left)
       .attr("y", (d) => y(d.party) || 0)
@@ -157,13 +183,13 @@ export default function PartyBarChart({
             `<div class="tooltip-title">${d.party}</div>
             <div class="tooltip-row"><span class="label">Total Spend</span><span class="value">$${d3.format(",.0f")(d.total)}</span></div>
             <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
-            <div class="tooltip-row"><span class="label">Per Member</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>`
+            <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>`
           );
       })
       .on("mouseleave", () => {
         tooltip.style("opacity", 0);
       });
-  }, [chartData]);
+  }, [chartData, containerWidth, mode]);
 
   return (
     <div className="chart-container animate-fade-in stagger-3">
@@ -171,8 +197,24 @@ export default function PartyBarChart({
         <div>
           <h3 className="chart-title">Spending by Party</h3>
           <p className="chart-subtitle">
-            Average total spend per member (normalized for party size)
+            {mode === "perMember"
+              ? "Average spend per member per quarter"
+              : "Total spend across all members in the selected period"}
           </p>
+        </div>
+        <div className="toggle-group" style={{ flexShrink: 0 }}>
+          <button
+            className={`toggle-btn ${mode === "perMember" ? "active" : ""}`}
+            onClick={() => setMode("perMember")}
+          >
+            Avg / Quarter
+          </button>
+          <button
+            className={`toggle-btn ${mode === "total" ? "active" : ""}`}
+            onClick={() => setMode("total")}
+          >
+            Total
+          </button>
         </div>
       </div>
       <div className="chart-body" ref={containerRef}>

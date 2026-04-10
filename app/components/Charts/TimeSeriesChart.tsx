@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
 import { EXPENSE_CATEGORIES } from "../../lib/types";
@@ -19,6 +19,18 @@ export default function TimeSeriesChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Aggregate data by quarter × category
   const chartData = useMemo(() => {
@@ -46,13 +58,18 @@ export default function TimeSeriesChart({
   }, [records, quarters]);
 
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || chartData.length === 0)
+    if (!svgRef.current || !containerRef.current || chartData.length === 0 || !containerWidth)
       return;
 
-    const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = 340;
-    const margin = { top: 12, right: 20, bottom: 40, left: 60 };
+    const width = containerWidth;
+    const isMobile = width < 500;
+    const height = isMobile ? 220 : 340;
+    const margin = {
+      top: 12,
+      right: isMobile ? 12 : 20,
+      bottom: isMobile ? 46 : 40,
+      left: isMobile ? 46 : 60,
+    };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
@@ -131,8 +148,9 @@ export default function TimeSeriesChart({
       .attr("stroke-width", 1.5)
       .attr("stroke-opacity", 0.9);
 
-    // X axis
-    const tickInterval = Math.max(1, Math.floor(chartData.length / 12));
+    // X axis — fewer ticks on narrow screens
+    const maxTicks = Math.max(4, Math.floor(width / 55));
+    const tickInterval = Math.max(1, Math.ceil(chartData.length / maxTicks));
     const tickValues = chartData
       .map((d) => d.quarter)
       .filter(
@@ -233,7 +251,7 @@ export default function TimeSeriesChart({
         g.selectAll(".hover-line").remove();
         tooltip.style("opacity", 0);
       });
-  }, [chartData, categories]);
+  }, [chartData, categories, containerWidth]);
 
   return (
     <div className="chart-container animate-fade-in stagger-2">

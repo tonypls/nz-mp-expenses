@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import * as d3 from "d3";
 import type {
   ExpenseData,
@@ -25,7 +25,7 @@ export default function Dashboard({ data }: DashboardProps) {
     dataSource: "combined",
     selectedParties: [...data.parties],
     selectedCategories: EXPENSE_CATEGORIES.map((c) => c.key),
-    yearStart: data.yearRange[0],
+    yearStart: Math.max(data.yearRange[0], 2020),
     yearEnd: data.yearRange[1],
     selectedMembers: [],
   });
@@ -122,6 +122,30 @@ export default function Dashboard({ data }: DashboardProps) {
     setFilters((prev) => ({ ...prev, selectedMembers: [] }));
   }, []);
 
+  const [shareLabel, setShareLabel] = useState<"share" | "copied">("share");
+  const shareTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: "NZ Parliamentary Expenses",
+      text: "Explore New Zealand MP & Minister transport and accommodation spending from 2008–2025.",
+      url,
+    };
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // user cancelled or share failed — fall through to clipboard
+      }
+    }
+    await navigator.clipboard.writeText(url);
+    setShareLabel("copied");
+    if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+    shareTimeoutRef.current = setTimeout(() => setShareLabel("share"), 2000);
+  }, []);
+
   // Resolved member info objects for selected members
   const selectedMemberInfos = useMemo(
     () =>
@@ -135,11 +159,37 @@ export default function Dashboard({ data }: DashboardProps) {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="app-header px-4 py-4 md:px-6">
-        <div className="max-w-[1600px] mx-auto">
-          <h1 className="header-title">NZ Parliamentary Expenses</h1>
-          <p className="header-subtitle">
-            Transport & accommodation spending transparency · 2008–2025
-          </p>
+        <div className="max-w-screen-2xl mx-auto flex items-start justify-between gap-3">
+          <div>
+            <h1 className="header-title">NZ Parliamentary Expenses</h1>
+            <p className="header-subtitle">
+              Transport & accommodation spending transparency ·{" "}
+              <span style={{ whiteSpace: "nowrap" }}>2008–2025</span>
+            </p>
+          </div>
+          <button
+            onClick={handleShare}
+            className="share-btn"
+            aria-label="Share this page"
+          >
+            {shareLabel === "copied" ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                  <polyline points="16 6 12 2 8 6"/>
+                  <line x1="12" y1="2" x2="12" y2="15"/>
+                </svg>
+                <span>Share</span>
+              </>
+            )}
+          </button>
         </div>
       </header>
 
@@ -154,7 +204,7 @@ export default function Dashboard({ data }: DashboardProps) {
 
       {/* Main Content */}
       <main className="flex-1 px-4 py-6 md:px-6">
-        <div className="max-w-[1600px] mx-auto space-y-6">
+        <div className="max-w-screen-2xl mx-auto space-y-6">
           {/* Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <div className="stat-card animate-fade-in stagger-1">
@@ -241,7 +291,7 @@ export default function Dashboard({ data }: DashboardProps) {
 
       {/* Footer */}
       <footer className="px-4 py-4 md:px-6 border-t border-[var(--border-subtle)]">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between text-xs text-[var(--text-muted)]">
+        <div className="max-w-screen-2xl mx-auto flex items-center justify-between text-xs text-[var(--text-muted)]">
           <span>
             Data sourced from New Zealand Parliamentary Service & Department of
             Internal Affairs

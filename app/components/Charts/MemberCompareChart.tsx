@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory, MemberInfo } from "../../lib/types";
 import { PARTY_COLORS } from "../../lib/types";
@@ -31,6 +31,18 @@ export default function MemberCompareChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Build per-member quarterly totals
   const { memberData, allQuarters } = useMemo(() => {
@@ -78,12 +90,18 @@ export default function MemberCompareChart({
 
   // Draw comparison chart
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || allQuarters.length === 0)
+    if (!svgRef.current || !containerRef.current || allQuarters.length === 0 || !containerWidth)
       return;
 
-    const width = containerRef.current.clientWidth;
-    const height = 300;
-    const margin = { top: 12, right: 20, bottom: 40, left: 60 };
+    const width = containerWidth;
+    const isMobile = width < 500;
+    const height = isMobile ? 220 : 300;
+    const margin = {
+      top: 12,
+      right: isMobile ? 12 : 20,
+      bottom: isMobile ? 46 : 40,
+      left: isMobile ? 46 : 60,
+    };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
@@ -170,7 +188,8 @@ export default function MemberCompareChart({
     }
 
     // Axes
-    const tickInterval = Math.max(1, Math.floor(allQuarters.length / 12));
+    const maxTicks = Math.max(4, Math.floor(width / 55));
+    const tickInterval = Math.max(1, Math.ceil(allQuarters.length / maxTicks));
     const tickValues = allQuarters.filter(
       (_, i) => i % tickInterval === 0 || i === allQuarters.length - 1
     );
@@ -193,7 +212,7 @@ export default function MemberCompareChart({
           .ticks(5)
           .tickFormat((d) => `$${d3.format(".2s")(d as number)}`)
       );
-  }, [memberData, allQuarters]);
+  }, [memberData, allQuarters, containerWidth]);
 
   return (
     <div

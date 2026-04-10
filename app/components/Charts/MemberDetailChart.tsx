@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory, MemberInfo } from "../../lib/types";
 import { EXPENSE_CATEGORIES, PARTY_COLORS } from "../../lib/types";
@@ -24,6 +24,18 @@ export default function MemberDetailChart({
   const donutRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Filter records for this member
   const memberRecords = useMemo(
@@ -70,12 +82,18 @@ export default function MemberDetailChart({
 
   // Draw timeline
   useEffect(() => {
-    if (!lineRef.current || !containerRef.current || timelineData.length === 0)
+    if (!lineRef.current || !containerRef.current || timelineData.length === 0 || !containerWidth)
       return;
 
-    const width = containerRef.current.clientWidth;
-    const height = 220;
-    const margin = { top: 12, right: 16, bottom: 36, left: 56 };
+    const width = containerWidth;
+    const isMobile = width < 400;
+    const height = isMobile ? 180 : 220;
+    const margin = {
+      top: 12,
+      right: isMobile ? 8 : 16,
+      bottom: isMobile ? 40 : 36,
+      left: isMobile ? 44 : 56,
+    };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
@@ -164,7 +182,8 @@ export default function MemberDetailChart({
     }
 
     // Axes
-    const tickInterval = Math.max(1, Math.floor(timelineData.length / 8));
+    const maxTicks = Math.max(3, Math.floor(width / 60));
+    const tickInterval = Math.max(1, Math.ceil(timelineData.length / maxTicks));
     const tickValues = timelineData
       .map((d) => d.quarter)
       .filter((_, i) => i % tickInterval === 0);
@@ -187,7 +206,7 @@ export default function MemberDetailChart({
           .ticks(4)
           .tickFormat((d) => `$${d3.format(".2s")(d as number)}`)
       );
-  }, [timelineData, categories]);
+  }, [timelineData, categories, containerWidth]);
 
   // Draw donut
   useEffect(() => {
