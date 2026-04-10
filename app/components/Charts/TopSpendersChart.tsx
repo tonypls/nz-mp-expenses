@@ -67,7 +67,10 @@ export default function TopSpendersChart({
               onClick={() => onSelectMember(s.name)}
             >
               <span className="spender-rank">{i + 1}</span>
-              <span className="spender-name">{s.name}</span>
+              <span className="spender-name">
+                {s.name}
+                <span className="party-tag" style={{ color: PARTY_COLORS[s.party] || "var(--text-muted)" }}>{s.party}</span>
+              </span>
               <div className="spender-bar-container">
                 <div
                   className="spender-bar"
