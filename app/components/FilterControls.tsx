@@ -107,7 +107,7 @@ function DualRangeSlider({
         {/* Start thumb */}
         <div
           className="dual-range-thumb"
-          style={{ left: `${startPercent}%` }}
+          style={{ left: `${startPercent}%`, zIndex: valueStart === valueEnd ? 3 : undefined }}
           onPointerDown={handlePointerDown("start")}
           role="slider"
           aria-label="Start year"
