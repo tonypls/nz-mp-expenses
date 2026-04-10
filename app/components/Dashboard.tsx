@@ -300,6 +300,17 @@ export default function Dashboard({ data }: DashboardProps) {
             {data.members.length} members
           </span>
         </div>
+        <div className="max-w-screen-2xl mx-auto mt-2 text-xs text-[var(--text-muted)]">
+          See a problem or want to help improve this site?{" "}
+          <a
+            href="https://github.com/tonypls/nz-mp-expenses"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[var(--text-secondary)] transition-colors"
+          >
+            Visit us on GitHub
+          </a>
+        </div>
       </footer>
     </div>
   );

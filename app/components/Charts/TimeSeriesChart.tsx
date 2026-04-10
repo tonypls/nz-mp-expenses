@@ -199,6 +199,61 @@ export default function TimeSeriesChart({
       return closest;
     };
 
+    const showTooltip = (clientX: number, clientY: number, mx: number) => {
+      const quarter = bisectQuarter(mx);
+      const datum = chartData.find((d) => d.quarter === quarter);
+      if (!datum) return;
+
+      g.selectAll(".hover-line").remove();
+      g.append("line")
+        .attr("class", "hover-line")
+        .attr("x1", x(quarter)!)
+        .attr("x2", x(quarter)!)
+        .attr("y1", 0)
+        .attr("y2", innerHeight)
+        .attr("stroke", "rgba(255,255,255,0.2)")
+        .attr("stroke-dasharray", "3,3");
+
+      const total = activeCats.reduce(
+        (sum, cat) => sum + (((datum as unknown as Record<string, number>)[cat.key]) || 0),
+        0
+      );
+
+      let html = `<div class="tooltip-title">${quarter}</div>`;
+      for (const cat of activeCats) {
+        const val = ((datum as unknown as Record<string, number>)[cat.key]) || 0;
+        html += `<div class="tooltip-row">
+          <span class="dot" style="background:${cat.color}"></span>
+          <span class="label">${cat.label}</span>
+          <span class="value">$${d3.format(",.0f")(val)}</span>
+        </div>`;
+      }
+      html += `<div class="tooltip-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:4px">
+        <span class="label" style="font-weight:600;color:var(--text-primary)">Total</span>
+        <span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(total)}</span>
+      </div>`;
+
+      // Render content first so we can measure height
+      tooltip.style("opacity", 1).html(html);
+
+      const tooltipEl = tooltipRef.current!;
+      const tooltipH = tooltipEl.offsetHeight;
+      const tooltipW = tooltipEl.offsetWidth;
+
+      const left = Math.min(clientX + 16, window.innerWidth - tooltipW - 8);
+      // Prefer above the cursor; fall back to below if not enough space
+      const top = clientY - tooltipH - 8 >= 0
+        ? clientY - tooltipH - 8
+        : clientY + 16;
+
+      tooltip.style("left", `${left}px`).style("top", `${top}px`);
+    };
+
+    const hideTooltip = () => {
+      g.selectAll(".hover-line").remove();
+      tooltip.style("opacity", 0);
+    };
+
     // Hover rect
     g.append("rect")
       .attr("width", innerWidth)
@@ -206,68 +261,46 @@ export default function TimeSeriesChart({
       .attr("fill", "transparent")
       .on("mousemove", (event: MouseEvent) => {
         const [mx] = d3.pointer(event);
-        const quarter = bisectQuarter(mx);
-        const datum = chartData.find((d) => d.quarter === quarter);
-        if (!datum) return;
-
-        // Vertical line
-        g.selectAll(".hover-line").remove();
-        g.append("line")
-          .attr("class", "hover-line")
-          .attr("x1", x(quarter)!)
-          .attr("x2", x(quarter)!)
-          .attr("y1", 0)
-          .attr("y2", innerHeight)
-          .attr("stroke", "rgba(255,255,255,0.2)")
-          .attr("stroke-dasharray", "3,3");
-
-        // Tooltip
-        const total = activeCats.reduce(
-          (sum, cat) => sum + (((datum as unknown as Record<string, number>)[cat.key]) || 0),
-          0
-        );
-
-        let html = `<div class="tooltip-title">${quarter}</div>`;
-        for (const cat of activeCats) {
-          const val = ((datum as unknown as Record<string, number>)[cat.key]) || 0;
-          html += `<div class="tooltip-row">
-            <span class="dot" style="background:${cat.color}"></span>
-            <span class="label">${cat.label}</span>
-            <span class="value">$${d3.format(",.0f")(val)}</span>
-          </div>`;
-        }
-        html += `<div class="tooltip-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:4px">
-          <span class="label" style="font-weight:600;color:var(--text-primary)">Total</span>
-          <span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(total)}</span>
-        </div>`;
-
-        tooltip
-          .style("opacity", 1)
-          .style("left", `${event.clientX + 16}px`)
-          .style("top", `${event.clientY - 16}px`)
-          .html(html);
+        showTooltip(event.clientX, event.clientY, mx);
       })
-      .on("mouseleave", () => {
-        g.selectAll(".hover-line").remove();
-        tooltip.style("opacity", 0);
-      });
+      .on("mouseleave", hideTooltip)
+      .on("touchstart", (event: TouchEvent) => {
+        event.preventDefault();
+        const touch = event.touches[0];
+        if (!touch || !svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        const mx = touch.clientX - rect.left - margin.left;
+        showTooltip(touch.clientX, touch.clientY, mx);
+      })
+      .on("touchmove", (event: TouchEvent) => {
+        event.preventDefault();
+        const touch = event.touches[0];
+        if (!touch || !svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        const mx = touch.clientX - rect.left - margin.left;
+        showTooltip(touch.clientX, touch.clientY, mx);
+      })
+      .on("touchend", hideTooltip)
+      .on("touchcancel", hideTooltip);
   }, [chartData, categories, containerWidth]);
 
   return (
-    <div className="chart-container animate-fade-in stagger-2">
-      <div className="chart-header">
-        <div>
-          <h3 className="chart-title">Quarterly Spending Over Time</h3>
-          <p className="chart-subtitle">
-            Stacked area showing total spend by category across all selected
-            members
-          </p>
+    <>
+      <div className="chart-container animate-fade-in stagger-2">
+        <div className="chart-header">
+          <div>
+            <h3 className="chart-title">Quarterly Spending Over Time</h3>
+            <p className="chart-subtitle">
+              Stacked area showing total spend by category across all selected
+              members
+            </p>
+          </div>
+        </div>
+        <div className="chart-body" ref={containerRef}>
+          <svg ref={svgRef} />
         </div>
       </div>
-      <div className="chart-body" ref={containerRef}>
-        <svg ref={svgRef} />
-      </div>
       <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
-    </div>
+    </>
   );
 }
