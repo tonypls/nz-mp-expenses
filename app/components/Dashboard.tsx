@@ -25,8 +25,8 @@ export default function Dashboard({ data }: DashboardProps) {
     dataSource: "combined",
     selectedParties: [...data.parties],
     selectedCategories: EXPENSE_CATEGORIES.map((c) => c.key),
-    yearStart: Math.max(data.yearRange[0], 2020),
-    yearEnd: data.yearRange[1],
+    yearStart: Math.max(data.yearRange[0], 2023),
+    yearEnd: Math.min(data.yearRange[1], 2026),
     selectedMembers: [],
   });
 
