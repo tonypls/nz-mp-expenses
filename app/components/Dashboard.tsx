@@ -129,7 +129,6 @@ export default function Dashboard({ data }: DashboardProps) {
     const url = window.location.href;
     const shareData = {
       title: "NZ Parliamentary Expenses",
-      text: "Explore New Zealand MP & Minister transport and accommodation spending from 2008–2025.",
       url,
     };
     if (navigator.share && navigator.canShare?.(shareData)) {
