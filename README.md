@@ -2,7 +2,7 @@
 
 An interactive transparency dashboard for New Zealand Members of Parliament and Ministers' expense data, covering quarterly returns from 2008 to 2025.
 
-**Live site:** https://nz-mp-expenses.pages.dev
+**Live site:** https://mpexpenses.nz
 
 ## About
 
