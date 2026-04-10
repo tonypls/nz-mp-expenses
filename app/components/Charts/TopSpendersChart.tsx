@@ -8,12 +8,14 @@ import { PARTY_COLORS } from "../../lib/types";
 interface TopSpendersChartProps {
   records: ExpenseRecord[];
   categories: ExpenseCategory[];
+  selectedMembers: string[];
   onSelectMember: (name: string) => void;
 }
 
 export default function TopSpendersChart({
   records,
   categories,
+  selectedMembers,
   onSelectMember,
 }: TopSpendersChartProps) {
   const topSpenders = useMemo(() => {
@@ -61,7 +63,7 @@ export default function TopSpendersChart({
           {topSpenders.map((s, i) => (
             <div
               key={s.name}
-              className="spender-row"
+              className={`spender-row${selectedMembers.includes(s.name) ? " spender-row--selected" : ""}`}
               onClick={() => onSelectMember(s.name)}
             >
               <span className="spender-rank">{i + 1}</span>

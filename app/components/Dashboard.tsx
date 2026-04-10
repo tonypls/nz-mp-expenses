@@ -288,6 +288,7 @@ export default function Dashboard({ data }: DashboardProps) {
             <TopSpendersChart
               records={filteredRecords}
               categories={filters.selectedCategories}
+              selectedMembers={filters.selectedMembers}
               onSelectMember={handleSelectMember}
             />
           </div>

@@ -200,7 +200,7 @@ export default function FilterControls({
 }: FilterControlsProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
