@@ -63,6 +63,22 @@ export const PARTY_COLORS: Record<string, string> = {
   Independent: "var(--party-independent)",
 };
 
+export const EMISSION_FACTORS: Partial<Record<ExpenseCategory, number>> = {
+  // kg CO2e per NZD spent
+  // Domestic: MfE 2024 NZ domestic aviation factor (~0.151 kgCO2e/pkm) at avg NZ airfare of ~$0.30/km
+  domestic_air_travel: 0.3,
+  // Surface: weighted blend of rental vehicles, taxis, and public transit
+  surface_travel: 0.1,
+  // International: MfE 2024 long-haul factor (~0.113 kgCO2e/pkm) at avg NZ international airfare of ~$0.12/km
+  international_travel: 0.4,
+  // Accommodation categories omitted — no reliable spend-to-emission factor
+};
+
+export const ACCOMMODATION_CATEGORIES: ExpenseCategory[] = [
+  "wellington_accommodation",
+  "other_accommodation",
+];
+
 export interface FilterState {
   dataSource: DataSourceFilter;
   selectedParties: string[];
@@ -70,4 +86,5 @@ export interface FilterState {
   yearStart: number;
   yearEnd: number;
   selectedMembers: string[];
+  showEmissions: boolean;
 }

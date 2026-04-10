@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory, MemberInfo } from "../../lib/types";
-import { PARTY_COLORS } from "../../lib/types";
+import { PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
 
 // Distinct colors for up to 10 compared members
 const COMPARE_COLORS = [
@@ -18,6 +18,7 @@ interface MemberCompareChartProps {
   quarters: string[];
   onRemoveMember: (name: string) => void;
   onClearAll: () => void;
+  showEmissions?: boolean;
 }
 
 export default function MemberCompareChart({
@@ -27,6 +28,7 @@ export default function MemberCompareChart({
   quarters,
   onRemoveMember,
   onClearAll,
+  showEmissions = false,
 }: MemberCompareChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,10 +61,10 @@ export default function MemberCompareChart({
       const mMap = memberMap.get(r.name);
       if (!mMap) continue;
       const key = `${r.year}-${r.quarter}`;
-      const sum = categories.reduce(
-        (acc, cat) => acc + (r[cat] || 0),
-        0
-      );
+      const sum = categories.reduce((acc, cat) => {
+        const raw = r[cat] || 0;
+        return acc + (showEmissions ? raw * (EMISSION_FACTORS[cat] || 0) / 1000 : raw);
+      }, 0);
       mMap.set(key, (mMap.get(key) || 0) + sum);
     }
 
@@ -86,7 +88,7 @@ export default function MemberCompareChart({
     }));
 
     return { memberData, allQuarters: activeQuarters };
-  }, [records, categories, members, quarters]);
+  }, [records, categories, members, quarters, showEmissions]);
 
   // Draw comparison chart
   useEffect(() => {
@@ -180,7 +182,7 @@ export default function MemberCompareChart({
               <div class="tooltip-row">
                 <span class="dot" style="background:${member.color}"></span>
                 <span class="label">${member.name}</span>
-                <span class="value">$${d3.format(",.0f")(d.value)}</span>
+                <span class="value">${showEmissions ? `${d3.format(",.2f")(d.value)} t` : `$${d3.format(",.0f")(d.value)}`}</span>
               </div>`
             );
         })
@@ -210,9 +212,13 @@ export default function MemberCompareChart({
         d3
           .axisLeft(y)
           .ticks(5)
-          .tickFormat((d) => `$${d3.format(".2s")(d as number)}`)
+          .tickFormat((d) =>
+        showEmissions
+          ? `${d3.format(".2s")(d as number)}t`
+          : `$${d3.format(".2s")(d as number)}`
+      )
       );
-  }, [memberData, allQuarters, containerWidth]);
+  }, [memberData, allQuarters, containerWidth, showEmissions]);
 
   return (
     <div
@@ -225,7 +231,9 @@ export default function MemberCompareChart({
             Member Comparison ({members.length})
           </h3>
           <p className="chart-subtitle">
-            Total quarterly spend overlaid for selected members
+            {showEmissions
+              ? "Estimated quarterly CO₂e (tonnes) overlaid for selected members"
+              : "Total quarterly spend overlaid for selected members"}
           </p>
         </div>
         <button
@@ -261,7 +269,9 @@ export default function MemberCompareChart({
                 {m.party}
               </span>
               <span className="font-mono text-[var(--text-muted)]">
-                ${d3.format(",.0f")(m.total)}
+                {showEmissions
+                  ? `${d3.format(",.1f")(m.total)} t`
+                  : `$${d3.format(",.0f")(m.total)}`}
               </span>
               <span className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">
                 ✕

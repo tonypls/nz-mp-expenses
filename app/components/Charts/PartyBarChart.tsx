@@ -3,18 +3,20 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
-import { PARTY_COLORS } from "../../lib/types";
+import { PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
 
 interface PartyBarChartProps {
   records: ExpenseRecord[];
   categories: ExpenseCategory[];
   parties: string[];
+  showEmissions?: boolean;
 }
 
 export default function PartyBarChart({
   records,
   categories,
   parties,
+  showEmissions = false,
 }: PartyBarChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -43,10 +45,10 @@ export default function PartyBarChart({
 
     for (const r of records) {
       if (!parties.includes(r.party)) continue;
-      const sum = categories.reduce(
-        (acc, cat) => acc + (r[cat] || 0),
-        0
-      );
+      const sum = categories.reduce((acc, cat) => {
+        const raw = r[cat] || 0;
+        return acc + (showEmissions ? raw * (EMISSION_FACTORS[cat] || 0) / 1000 : raw);
+      }, 0);
 
       if (!partyData.has(r.party)) {
         partyData.set(r.party, { total: 0, memberCount: 0, quarterRecords: 0, perCapita: 0 });
@@ -66,7 +68,7 @@ export default function PartyBarChart({
 
     return [...partyData.entries()]
       .map(([party, data]) => ({ party, ...data }));
-  }, [records, categories, parties]);
+  }, [records, categories, parties, showEmissions]);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || chartData.length === 0 || !containerWidth)
@@ -163,7 +165,11 @@ export default function PartyBarChart({
       .attr("fill", "var(--text-muted)")
       .style("font-size", isMobile ? "10px" : "11px")
       .style("font-family", "var(--font-geist-mono), monospace")
-      .text((d) => `$${d3.format(".2s")(getValue(d))}`);
+      .text((d) =>
+        showEmissions
+          ? `${d3.format(".2s")(getValue(d))}t`
+          : `$${d3.format(".2s")(getValue(d))}`
+      );
 
     // Hover
     g.selectAll(".bar-hover")
@@ -180,27 +186,38 @@ export default function PartyBarChart({
           .style("left", `${event.clientX + 16}px`)
           .style("top", `${event.clientY - 16}px`)
           .html(
-            `<div class="tooltip-title">${d.party}</div>
-            <div class="tooltip-row"><span class="label">Total Spend</span><span class="value">$${d3.format(",.0f")(d.total)}</span></div>
-            <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
-            <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>`
+            showEmissions
+              ? `<div class="tooltip-title">${d.party}</div>
+                <div class="tooltip-row"><span class="label">Total CO₂e</span><span class="value">${d3.format(",.1f")(d.total)} t</span></div>
+                <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
+                <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">${d3.format(",.2f")(d.perCapita)} t</span></div>`
+              : `<div class="tooltip-title">${d.party}</div>
+                <div class="tooltip-row"><span class="label">Total Spend</span><span class="value">$${d3.format(",.0f")(d.total)}</span></div>
+                <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
+                <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>`
           );
       })
       .on("mouseleave", () => {
         tooltip.style("opacity", 0);
       });
-  }, [chartData, containerWidth, mode]);
+  }, [chartData, containerWidth, mode, showEmissions]);
 
   return (
     <>
       <div className="chart-container animate-fade-in stagger-3">
         <div className="chart-header">
           <div>
-            <h3 className="chart-title">Spending by Party</h3>
+            <h3 className="chart-title">
+              {showEmissions ? "Emissions by Party" : "Spending by Party"}
+            </h3>
             <p className="chart-subtitle">
-              {mode === "perMember"
-                ? "Average spend per member per quarter"
-                : "Total spend across all members in the selected period"}
+              {showEmissions
+                ? mode === "perMember"
+                  ? "Average CO₂e per member per quarter (tonnes)"
+                  : "Total estimated CO₂e across all members in the selected period"
+                : mode === "perMember"
+                  ? "Average spend per member per quarter"
+                  : "Total spend across all members in the selected period"}
             </p>
           </div>
           <div className="toggle-group" style={{ flexShrink: 0 }}>

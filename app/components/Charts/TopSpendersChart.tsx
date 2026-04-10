@@ -3,13 +3,14 @@
 import { useMemo } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
-import { PARTY_COLORS } from "../../lib/types";
+import { PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
 
 interface TopSpendersChartProps {
   records: ExpenseRecord[];
   categories: ExpenseCategory[];
   selectedMembers: string[];
   onSelectMember: (name: string) => void;
+  showEmissions?: boolean;
 }
 
 export default function TopSpendersChart({
@@ -17,6 +18,7 @@ export default function TopSpendersChart({
   categories,
   selectedMembers,
   onSelectMember,
+  showEmissions = false,
 }: TopSpendersChartProps) {
   const topSpenders = useMemo(() => {
     const memberTotals = new Map<
@@ -25,10 +27,10 @@ export default function TopSpendersChart({
     >();
 
     for (const r of records) {
-      const sum = categories.reduce(
-        (acc, cat) => acc + (r[cat] || 0),
-        0
-      );
+      const sum = categories.reduce((acc, cat) => {
+        const raw = r[cat] || 0;
+        return acc + (showEmissions ? raw * (EMISSION_FACTORS[cat] || 0) / 1000 : raw);
+      }, 0);
       if (!memberTotals.has(r.name)) {
         memberTotals.set(r.name, { total: 0, party: r.party, quarters: 0 });
       }
@@ -43,7 +45,7 @@ export default function TopSpendersChart({
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 25);
-  }, [records, categories]);
+  }, [records, categories, showEmissions]);
 
   const maxTotal = topSpenders[0]?.total || 1;
 
@@ -51,10 +53,13 @@ export default function TopSpendersChart({
     <div className="chart-container animate-fade-in stagger-4">
       <div className="chart-header">
         <div>
-          <h3 className="chart-title">Top Spenders</h3>
+          <h3 className="chart-title">
+            {showEmissions ? "Top Emitters" : "Top Spenders"}
+          </h3>
           <p className="chart-subtitle">
-            Highest total spend in selected period and filters. Click to view
-            details.
+            {showEmissions
+              ? "Highest estimated CO₂e (tonnes) in selected period. Click to view details."
+              : "Highest total spend in selected period and filters. Click to view details."}
           </p>
         </div>
       </div>
@@ -81,7 +86,9 @@ export default function TopSpendersChart({
                 />
               </div>
               <span className="spender-amount">
-                ${d3.format(",.0f")(s.total)}
+                {showEmissions
+                  ? `${d3.format(",.1f")(s.total)} t`
+                  : `$${d3.format(",.0f")(s.total)}`}
               </span>
             </div>
           ))}

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type {
   FilterState,
   DataSourceFilter,
   ExpenseCategory,
   MemberInfo,
 } from "../lib/types";
-import { EXPENSE_CATEGORIES, PARTY_COLORS } from "../lib/types";
+import { EXPENSE_CATEGORIES, PARTY_COLORS, EMISSION_FACTORS, ACCOMMODATION_CATEGORIES } from "../lib/types";
 
 interface FilterControlsProps {
   parties: string[];
@@ -188,6 +189,107 @@ function FilterIcon() {
     >
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
     </svg>
+  );
+}
+
+/* ─── Emissions Info Tooltip ─────────────────────────────────────── */
+const TRANSPORT_FACTORS: { key: string; label: string; color: string; factor: number }[] = [
+  { key: "domestic_air_travel",  label: "Domestic Air Travel",  color: "var(--cat-air)",           factor: 0.30 },
+  { key: "surface_travel",       label: "Surface Travel",       color: "var(--cat-surface)",        factor: 0.10 },
+  { key: "international_travel", label: "International Travel", color: "var(--cat-international)", factor: 0.40 },
+];
+
+function EmissionsInfoTooltip() {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const show = useCallback(() => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.top, left: r.left + r.width / 2 });
+  }, []);
+
+  const hide = useCallback(() => setPos(null), []);
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center" }}>
+      <button
+        ref={btnRef}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        aria-label="How emissions are estimated"
+        style={{
+          background: "none",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: "50%",
+          width: "14px",
+          height: "14px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "help",
+          color: "var(--text-muted)",
+          fontSize: "9px",
+          fontWeight: "700",
+          lineHeight: 1,
+          padding: 0,
+          flexShrink: 0,
+        }}
+      >
+        ?
+      </button>
+      {pos && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            top: `${pos.top - 8}px`,
+            left: `${pos.left}px`,
+            transform: "translate(-50%, -100%)",
+            zIndex: 9999,
+            width: "280px",
+            background: "var(--surface-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "8px",
+            padding: "10px 12px",
+            fontSize: "11px",
+            lineHeight: "1.5",
+            color: "var(--text-secondary)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            pointerEvents: "none",
+          }}
+        >
+          <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
+            How emissions are estimated
+          </p>
+          <p style={{ marginBottom: "8px" }}>
+            Transport spending is converted to estimated CO₂e using spend-based
+            emission factors derived from NZ Ministry for the Environment 2024
+            emission factors and average NZ transport costs:
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "8px" }}>
+            {TRANSPORT_FACTORS.map(({ key, label, color, factor }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                <span style={{
+                  width: "8px", height: "8px", borderRadius: "2px",
+                  background: color, flexShrink: 0,
+                }} />
+                <span style={{ flex: 1, color: "var(--text-secondary)" }}>{label}</span>
+                <span style={{ fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-geist-mono), monospace" }}>
+                  {factor} kg CO₂e / NZD
+                </span>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: "var(--text-muted)" }}>
+            Accommodation is excluded — no reliable spend-to-emissions factor
+            exists. Results are estimates only and shown in tonnes CO₂e (t).
+          </p>
+        </div>,
+        document.body
+      )}
+    </span>
   );
 }
 
@@ -478,24 +580,53 @@ export default function FilterControls({
               </div>
             </div>
 
-            {/* Row 3: Categories */}
-            <div className="filter-row">
-              <div className="filter-group filter-group--full">
+            {/* Row 3: Categories + Emissions Toggle */}
+            <div className="filter-row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: "12px" }}>
+              <div className="filter-group filter-group--full" style={{ flex: 1, minWidth: 0 }}>
                 <div className="filter-section-label">Expense Categories</div>
                 <div className="flex flex-wrap gap-1.5">
                   {EXPENSE_CATEGORIES.map(({ key, label, color }) => {
+                    const isAccommodation = ACCOMMODATION_CATEGORIES.includes(key);
+                    const disabledByEmissions = filters.showEmissions && isAccommodation;
                     return (
                       <button
                         key={key}
-                        className={`category-toggle ${filters.selectedCategories.includes(key) ? "active" : ""}`}
-                        style={{ "--cat-color": color } as React.CSSProperties}
-                        onClick={() => toggleCategory(key)}
+                        className={`category-toggle ${filters.selectedCategories.includes(key) && !disabledByEmissions ? "active" : ""}`}
+                        style={{
+                          "--cat-color": color,
+                          opacity: disabledByEmissions ? 0.35 : 1,
+                          cursor: disabledByEmissions ? "not-allowed" : undefined,
+                        } as React.CSSProperties}
+                        onClick={() => !disabledByEmissions && toggleCategory(key)}
+                        title={disabledByEmissions ? "Accommodation has no emissions factor" : undefined}
                       >
                         <span className="bar" />
                         {label}
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Emissions toggle */}
+              <div className="filter-group" style={{ flexShrink: 0 }}>
+                <div className="filter-section-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  View
+                  <EmissionsInfoTooltip />
+                </div>
+                <div className="toggle-group">
+                  <button
+                    className={`toggle-btn ${!filters.showEmissions ? "active" : ""}`}
+                    onClick={() => onChange({ ...filters, showEmissions: false })}
+                  >
+                    Spending
+                  </button>
+                  <button
+                    className={`toggle-btn ${filters.showEmissions ? "active" : ""}`}
+                    onClick={() => onChange({ ...filters, showEmissions: true })}
+                  >
+                    Emissions
+                  </button>
                 </div>
               </div>
             </div>

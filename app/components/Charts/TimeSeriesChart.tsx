@@ -3,18 +3,20 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
-import { EXPENSE_CATEGORIES } from "../../lib/types";
+import { EXPENSE_CATEGORIES, EMISSION_FACTORS } from "../../lib/types";
 
 interface TimeSeriesChartProps {
   records: ExpenseRecord[];
   categories: ExpenseCategory[];
   quarters: string[];
+  showEmissions?: boolean;
 }
 
 export default function TimeSeriesChart({
   records,
   categories,
   quarters,
+  showEmissions = false,
 }: TimeSeriesChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -32,7 +34,7 @@ export default function TimeSeriesChart({
     return () => ro.disconnect();
   }, []);
 
-  // Aggregate data by quarter × category
+  // Aggregate data by quarter × category (applying emission factors if needed)
   const chartData = useMemo(() => {
     const qMap = new Map<string, Record<string, number>>();
     for (const q of quarters) {
@@ -48,14 +50,17 @@ export default function TimeSeriesChart({
       const row = qMap.get(key);
       if (!row) continue;
       for (const cat of EXPENSE_CATEGORIES) {
-        row[cat.key] += r[cat.key] || 0;
+        const raw = r[cat.key] || 0;
+        row[cat.key] += showEmissions
+          ? raw * (EMISSION_FACTORS[cat.key] || 0) / 1000
+          : raw;
       }
     }
 
     return quarters
       .filter((q) => qMap.has(q))
       .map((q) => ({ ...qMap.get(q)!, quarter: q }));
-  }, [records, quarters]);
+  }, [records, quarters, showEmissions]);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || chartData.length === 0 || !containerWidth)
@@ -179,7 +184,11 @@ export default function TimeSeriesChart({
         d3
           .axisLeft(y)
           .ticks(5)
-          .tickFormat((d) => `$${d3.format(".2s")(d as number)}`)
+          .tickFormat((d) =>
+            showEmissions
+              ? `${d3.format(".2s")(d as number)}t`
+              : `$${d3.format(".2s")(d as number)}`
+          )
       );
 
     // Tooltip overlay
@@ -219,18 +228,21 @@ export default function TimeSeriesChart({
         0
       );
 
+      const fmtVal = (v: number) =>
+        showEmissions ? `${d3.format(",.2f")(v)} t` : `$${d3.format(",.0f")(v)}`;
+
       let html = `<div class="tooltip-title">${quarter}</div>`;
       for (const cat of activeCats) {
         const val = ((datum as unknown as Record<string, number>)[cat.key]) || 0;
         html += `<div class="tooltip-row">
           <span class="dot" style="background:${cat.color}"></span>
           <span class="label">${cat.label}</span>
-          <span class="value">$${d3.format(",.0f")(val)}</span>
+          <span class="value">${fmtVal(val)}</span>
         </div>`;
       }
       html += `<div class="tooltip-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:4px">
         <span class="label" style="font-weight:600;color:var(--text-primary)">Total</span>
-        <span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(total)}</span>
+        <span class="value" style="color:var(--accent-blue)">${fmtVal(total)}</span>
       </div>`;
 
       // Render content first so we can measure height
@@ -282,17 +294,20 @@ export default function TimeSeriesChart({
       })
       .on("touchend", hideTooltip)
       .on("touchcancel", hideTooltip);
-  }, [chartData, categories, containerWidth]);
+  }, [chartData, categories, containerWidth, showEmissions]);
 
   return (
     <>
       <div className="chart-container animate-fade-in stagger-2">
         <div className="chart-header">
           <div>
-            <h3 className="chart-title">Quarterly Spending Over Time</h3>
+            <h3 className="chart-title">
+              {showEmissions ? "Quarterly Emissions Over Time" : "Quarterly Spending Over Time"}
+            </h3>
             <p className="chart-subtitle">
-              Stacked area showing total spend by category across all selected
-              members
+              {showEmissions
+                ? "Estimated CO₂e (tonnes) by transport category across all selected members"
+                : "Stacked area showing total spend by category across all selected members"}
             </p>
           </div>
         </div>

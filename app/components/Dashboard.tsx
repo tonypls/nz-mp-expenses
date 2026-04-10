@@ -8,7 +8,7 @@ import type {
   ExpenseRecord,
   ExpenseCategory,
 } from "../lib/types";
-import { EXPENSE_CATEGORIES } from "../lib/types";
+import { EXPENSE_CATEGORIES, EMISSION_FACTORS, ACCOMMODATION_CATEGORIES } from "../lib/types";
 import FilterControls from "./FilterControls";
 import TimeSeriesChart from "./Charts/TimeSeriesChart";
 import PartyBarChart from "./Charts/PartyBarChart";
@@ -28,7 +28,16 @@ export default function Dashboard({ data }: DashboardProps) {
     yearStart: Math.max(data.yearRange[0], 2023),
     yearEnd: Math.min(data.yearRange[1], 2026),
     selectedMembers: [],
+    showEmissions: false,
   });
+
+  // When emissions mode is on, exclude accommodation categories
+  const effectiveCategories = useMemo<ExpenseCategory[]>(() => {
+    if (!filters.showEmissions) return filters.selectedCategories;
+    return filters.selectedCategories.filter(
+      (c) => !ACCOMMODATION_CATEGORIES.includes(c)
+    );
+  }, [filters.showEmissions, filters.selectedCategories]);
 
   // Apply filters to records — DON'T filter by selectedMembers here
   // so the aggregate charts still show full data context
@@ -70,17 +79,21 @@ export default function Dashboard({ data }: DashboardProps) {
 
   // Stats
   const stats = useMemo(() => {
-    const activeCategories = filters.selectedCategories;
-    let totalSpend = 0;
+    let totalValue = 0;
     const memberQuarterCount = new Map<string, number>();
     const memberTotals = new Map<string, number>();
 
     for (const r of filteredRecords) {
-      const sum = activeCategories.reduce(
-        (acc: number, cat: ExpenseCategory) => acc + (r[cat] || 0),
-        0
-      );
-      totalSpend += sum;
+      let sum = 0;
+      for (const cat of effectiveCategories) {
+        const raw = r[cat] || 0;
+        if (filters.showEmissions) {
+          sum += raw * (EMISSION_FACTORS[cat] || 0) / 1000; // tonnes CO2e
+        } else {
+          sum += raw;
+        }
+      }
+      totalValue += sum;
 
       if (!memberQuarterCount.has(r.name)) {
         memberQuarterCount.set(r.name, 0);
@@ -93,7 +106,7 @@ export default function Dashboard({ data }: DashboardProps) {
     const memberCount = memberQuarterCount.size;
     const totalQuarterRecords = filteredRecords.length;
     const avgPerMemberPerQuarter =
-      totalQuarterRecords > 0 ? totalSpend / totalQuarterRecords : 0;
+      totalQuarterRecords > 0 ? totalValue / totalQuarterRecords : 0;
 
     let highestSpender = { name: "—", total: 0 };
     for (const [name, total] of memberTotals) {
@@ -103,12 +116,12 @@ export default function Dashboard({ data }: DashboardProps) {
     }
 
     return {
-      totalSpend,
+      totalValue,
       avgPerMemberPerQuarter,
       highestSpender,
       memberCount,
     };
-  }, [filteredRecords, filters.selectedCategories]);
+  }, [filteredRecords, effectiveCategories, filters.showEmissions]);
 
   const handleSelectMember = useCallback((name: string) => {
     setFilters((prev) => {
@@ -214,13 +227,19 @@ export default function Dashboard({ data }: DashboardProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <div className="stat-card animate-fade-in stagger-1">
               <div className="stat-value">
-                ${d3.format(".3s")(stats.totalSpend)}
+                {filters.showEmissions
+                  ? `${d3.format(".3s")(stats.totalValue)} t`
+                  : `$${d3.format(".3s")(stats.totalValue)}`}
               </div>
-              <div className="stat-label">Total Spend</div>
+              <div className="stat-label">
+                {filters.showEmissions ? "Total CO₂e" : "Total Spend"}
+              </div>
             </div>
             <div className="stat-card animate-fade-in stagger-2">
               <div className="stat-value">
-                ${d3.format(",.0f")(stats.avgPerMemberPerQuarter)}
+                {filters.showEmissions
+                  ? `${d3.format(",.2f")(stats.avgPerMemberPerQuarter)} t`
+                  : `$${d3.format(",.0f")(stats.avgPerMemberPerQuarter)}`}
               </div>
               <div className="stat-label">Avg per Member / Quarter</div>
             </div>
@@ -242,8 +261,10 @@ export default function Dashboard({ data }: DashboardProps) {
                 {stats.highestSpender.name}
               </div>
               <div className="stat-label">
-                Highest Spender ·{" "}
-                ${d3.format(",.0f")(stats.highestSpender.total)}
+                {filters.showEmissions ? "Highest Emitter" : "Highest Spender"} ·{" "}
+                {filters.showEmissions
+                  ? `${d3.format(",.1f")(stats.highestSpender.total)} t CO₂e`
+                  : `$${d3.format(",.0f")(stats.highestSpender.total)}`}
               </div>
             </div>
           </div>
@@ -252,10 +273,11 @@ export default function Dashboard({ data }: DashboardProps) {
           {selectedMemberInfos.length === 1 && (
             <MemberDetailChart
               records={filteredRecords}
-              categories={filters.selectedCategories}
+              categories={effectiveCategories}
               member={selectedMemberInfos[0]}
               quarters={filteredQuarters}
               onClose={handleClearMembers}
+              showEmissions={filters.showEmissions}
             />
           )}
 
@@ -263,33 +285,37 @@ export default function Dashboard({ data }: DashboardProps) {
           {selectedMemberInfos.length >= 2 && (
             <MemberCompareChart
               records={filteredRecords}
-              categories={filters.selectedCategories}
+              categories={effectiveCategories}
               members={selectedMemberInfos}
               quarters={filteredQuarters}
               onRemoveMember={handleRemoveMember}
               onClearAll={handleClearMembers}
+              showEmissions={filters.showEmissions}
             />
           )}
 
           {/* Time Series */}
           <TimeSeriesChart
             records={memberFilteredRecords}
-            categories={filters.selectedCategories}
+            categories={effectiveCategories}
             quarters={filteredQuarters}
+            showEmissions={filters.showEmissions}
           />
 
           {/* Two Column: Party Bar + Top Spenders */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <PartyBarChart
               records={filteredRecords}
-              categories={filters.selectedCategories}
+              categories={effectiveCategories}
               parties={filters.selectedParties}
+              showEmissions={filters.showEmissions}
             />
             <TopSpendersChart
               records={filteredRecords}
-              categories={filters.selectedCategories}
+              categories={effectiveCategories}
               selectedMembers={filters.selectedMembers}
               onSelectMember={handleSelectMember}
+              showEmissions={filters.showEmissions}
             />
           </div>
         </div>

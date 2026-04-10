@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory, MemberInfo } from "../../lib/types";
-import { EXPENSE_CATEGORIES, PARTY_COLORS } from "../../lib/types";
+import { EXPENSE_CATEGORIES, PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
 
 interface MemberDetailChartProps {
   records: ExpenseRecord[];
@@ -11,6 +11,7 @@ interface MemberDetailChartProps {
   member: MemberInfo;
   quarters: string[];
   onClose: () => void;
+  showEmissions?: boolean;
 }
 
 export default function MemberDetailChart({
@@ -19,6 +20,7 @@ export default function MemberDetailChart({
   member,
   quarters,
   onClose,
+  showEmissions = false,
 }: MemberDetailChartProps) {
   const lineRef = useRef<SVGSVGElement>(null);
   const donutRef = useRef<SVGSVGElement>(null);
@@ -70,13 +72,16 @@ export default function MemberDetailChart({
     const totals: { key: string; label: string; color: string; value: number }[] = [];
     for (const cat of EXPENSE_CATEGORIES) {
       if (!categories.includes(cat.key)) continue;
-      const val = memberRecords.reduce((sum, r) => sum + (r[cat.key] || 0), 0);
+      const rawVal = memberRecords.reduce((sum, r) => sum + (r[cat.key] || 0), 0);
+      const val = showEmissions
+        ? rawVal * (EMISSION_FACTORS[cat.key] || 0) / 1000
+        : rawVal;
       if (val > 0) {
         totals.push({ key: cat.key, label: cat.label, color: cat.color, value: val });
       }
     }
     return totals;
-  }, [memberRecords, categories]);
+  }, [memberRecords, categories, showEmissions]);
 
   const grandTotal = categoryTotals.reduce((s, c) => s + c.value, 0);
 
@@ -118,8 +123,11 @@ export default function MemberDetailChart({
       categories.includes(c.key)
     );
 
+    const toDisplayVal = (raw: number, catKey: string) =>
+      showEmissions ? raw * (EMISSION_FACTORS[catKey as keyof typeof EMISSION_FACTORS] || 0) / 1000 : raw;
+
     const allVals = timelineData.flatMap((d) =>
-      activeCats.map((c) => ((d as unknown as Record<string, number>)[c.key]) || 0)
+      activeCats.map((c) => toDisplayVal(((d as unknown as Record<string, number>)[c.key]) || 0, c.key))
     );
     const yMax = d3.max(allVals) || 0;
 
@@ -143,7 +151,7 @@ export default function MemberDetailChart({
       const line = d3
         .line<Record<string, number | string>>()
         .x((d) => x(d.quarter as string) || 0)
-        .y((d) => y((d[cat.key] as number) || 0))
+        .y((d) => y(toDisplayVal((d[cat.key] as number) || 0, cat.key)))
         .curve(d3.curveMonotoneX);
 
       g.append("path")
@@ -158,13 +166,15 @@ export default function MemberDetailChart({
         .data(timelineData)
         .join("circle")
         .attr("cx", (d) => x(d.quarter) || 0)
-        .attr("cy", (d) => y(((d as unknown as Record<string, number>)[cat.key]) || 0))
+        .attr("cy", (d) => y(toDisplayVal(((d as unknown as Record<string, number>)[cat.key]) || 0, cat.key)))
         .attr("r", 3)
         .attr("fill", cat.color)
         .attr("stroke", "var(--bg-card)")
         .attr("stroke-width", 1.5)
         .on("mousemove", (event: MouseEvent, d) => {
-          const val = ((d as unknown as Record<string, number>)[cat.key]) || 0;
+          const raw = ((d as unknown as Record<string, number>)[cat.key]) || 0;
+          const val = toDisplayVal(raw, cat.key);
+          const fmtVal = showEmissions ? `${d3.format(",.2f")(val)} t` : `$${d3.format(",.0f")(val)}`;
           tooltip
             .style("opacity", 1)
             .style("left", `${event.clientX + 12}px`)
@@ -174,7 +184,7 @@ export default function MemberDetailChart({
               <div class="tooltip-row">
                 <span class="dot" style="background:${cat.color}"></span>
                 <span class="label">${cat.label}</span>
-                <span class="value">$${d3.format(",.0f")(val)}</span>
+                <span class="value">${fmtVal}</span>
               </div>`
             );
         })
@@ -204,9 +214,13 @@ export default function MemberDetailChart({
         d3
           .axisLeft(y)
           .ticks(4)
-          .tickFormat((d) => `$${d3.format(".2s")(d as number)}`)
+          .tickFormat((d) =>
+            showEmissions
+              ? `${d3.format(".2s")(d as number)}t`
+              : `$${d3.format(".2s")(d as number)}`
+          )
       );
-  }, [timelineData, categories, containerWidth]);
+  }, [timelineData, categories, containerWidth, showEmissions]);
 
   // Draw donut
   useEffect(() => {
@@ -257,7 +271,11 @@ export default function MemberDetailChart({
       .style("font-size", "14px")
       .style("font-weight", "700")
       .style("font-family", "var(--font-geist-mono), monospace")
-      .text(`$${d3.format(".3s")(grandTotal)}`);
+      .text(
+        showEmissions
+          ? `${d3.format(".2s")(grandTotal)}t`
+          : `$${d3.format(".3s")(grandTotal)}`
+      );
   }, [categoryTotals, grandTotal]);
 
   return (
@@ -281,7 +299,7 @@ export default function MemberDetailChart({
           {/* Timeline */}
           <div className="flex-1 w-full" ref={containerRef}>
             <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider font-semibold">
-              Spending Timeline
+              {showEmissions ? "Emissions Timeline" : "Spending Timeline"}
             </p>
             <svg ref={lineRef} />
           </div>
