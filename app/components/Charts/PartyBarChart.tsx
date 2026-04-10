@@ -192,35 +192,37 @@ export default function PartyBarChart({
   }, [chartData, containerWidth, mode]);
 
   return (
-    <div className="chart-container animate-fade-in stagger-3">
-      <div className="chart-header">
-        <div>
-          <h3 className="chart-title">Spending by Party</h3>
-          <p className="chart-subtitle">
-            {mode === "perMember"
-              ? "Average spend per member per quarter"
-              : "Total spend across all members in the selected period"}
-          </p>
+    <>
+      <div className="chart-container animate-fade-in stagger-3">
+        <div className="chart-header">
+          <div>
+            <h3 className="chart-title">Spending by Party</h3>
+            <p className="chart-subtitle">
+              {mode === "perMember"
+                ? "Average spend per member per quarter"
+                : "Total spend across all members in the selected period"}
+            </p>
+          </div>
+          <div className="toggle-group" style={{ flexShrink: 0 }}>
+            <button
+              className={`toggle-btn ${mode === "perMember" ? "active" : ""}`}
+              onClick={() => setMode("perMember")}
+            >
+              Avg / Quarter
+            </button>
+            <button
+              className={`toggle-btn ${mode === "total" ? "active" : ""}`}
+              onClick={() => setMode("total")}
+            >
+              Total
+            </button>
+          </div>
         </div>
-        <div className="toggle-group" style={{ flexShrink: 0 }}>
-          <button
-            className={`toggle-btn ${mode === "perMember" ? "active" : ""}`}
-            onClick={() => setMode("perMember")}
-          >
-            Avg / Quarter
-          </button>
-          <button
-            className={`toggle-btn ${mode === "total" ? "active" : ""}`}
-            onClick={() => setMode("total")}
-          >
-            Total
-          </button>
+        <div className="chart-body" ref={containerRef}>
+          <svg ref={svgRef} />
         </div>
-      </div>
-      <div className="chart-body" ref={containerRef}>
-        <svg ref={svgRef} />
       </div>
       <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
-    </div>
+    </>
   );
 }

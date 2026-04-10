@@ -54,6 +54,12 @@ export default function Dashboard({ data }: DashboardProps) {
     });
   }, [data.records, filters]);
 
+  // Records filtered by selected members (for charts that should reflect member selection)
+  const memberFilteredRecords = useMemo(() => {
+    if (filters.selectedMembers.length === 0) return filteredRecords;
+    return filteredRecords.filter((r) => filters.selectedMembers.includes(r.name));
+  }, [filteredRecords, filters.selectedMembers]);
+
   // Filtered quarters for time series
   const filteredQuarters = useMemo(() => {
     return data.quarters.filter((q: string) => {
@@ -267,7 +273,7 @@ export default function Dashboard({ data }: DashboardProps) {
 
           {/* Time Series */}
           <TimeSeriesChart
-            records={filteredRecords}
+            records={memberFilteredRecords}
             categories={filters.selectedCategories}
             quarters={filteredQuarters}
           />
