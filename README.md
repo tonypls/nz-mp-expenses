@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NZ Parliamentary Expenses
 
-## Getting Started
+An interactive transparency dashboard for New Zealand Members of Parliament and Ministers' expense data, covering quarterly returns from 2008 to 2025.
 
-First, run the development server:
+**Live site:** https://nz-mp-expenses.pages.dev
+
+## About
+
+This project visualises publicly available expense data from the New Zealand Parliamentary Service and Department of Internal Affairs. It is an **apolitical project** — the goal is simply to make public accountability data easier to explore and understand. No editorial judgement is made about any individual, party, or policy.
+
+The data covers transport and accommodation expenses claimed by MPs and Ministers. By presenting it visually and interactively, we hope to lower the barrier for journalists, researchers, and members of the public who want to engage with this information.
+
+## Contributing
+
+Contributions are welcome. There are two main ways to help:
+
+**Improve the visualisation**
+- Open a pull request with UI improvements, new chart types, better filtering, or accessibility fixes
+- Report bugs or suggest features via [GitHub Issues](https://github.com/tonypls/nz-mp-expenses/issues)
+
+**Improve data quality**
+- If you spot missing records, incorrect figures, or data formatting issues, please [open an issue](https://github.com/tonypls/nz-mp-expenses/issues) describing the problem and linking to the source if possible
+- Corrections to party affiliations, name variations, or date ranges are especially valuable
+
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build   # produces static export in /out
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data Sources
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [New Zealand Parliamentary Service](https://www.parliament.nz/en/visit-and-learn/mps-and-ministers/members-expenses/)
+- [Department of Internal Affairs](https://www.dia.govt.nz/)
