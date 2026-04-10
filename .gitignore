@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python
+venv/
+data/venv/
+__pycache__/
+*.pyc
+*.log
+temp.html
+temp_html.html
+lt_url.txt
+data/webhook_requests.json
+test.xls
