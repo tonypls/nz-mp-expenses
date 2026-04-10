@@ -624,6 +624,10 @@ body {
 }
 
 /* D3 chart styles */
+.chart-svg {
+  overflow: visible;
+}
+
 .chart-svg text {
   fill: var(--text-muted);
   font-size: 11px;
