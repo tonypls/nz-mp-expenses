@@ -236,6 +236,10 @@ export default function FilterControls({
 
   const toggleCategory = useCallback(
     (cat: ExpenseCategory) => {
+      if (filters.selectedCategories.length === EXPENSE_CATEGORIES.length) {
+        onChange({ ...filters, selectedCategories: [cat] });
+        return;
+      }
       const selected = filters.selectedCategories.includes(cat)
         ? filters.selectedCategories.filter((c) => c !== cat)
         : [...filters.selectedCategories, cat];
