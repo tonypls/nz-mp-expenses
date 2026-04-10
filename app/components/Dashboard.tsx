@@ -14,6 +14,7 @@ import TimeSeriesChart from "./Charts/TimeSeriesChart";
 import PartyBarChart from "./Charts/PartyBarChart";
 import TopSpendersChart from "./Charts/TopSpendersChart";
 import MemberDetailChart from "./Charts/MemberDetailChart";
+import MemberCompareChart from "./Charts/MemberCompareChart";
 
 interface DashboardProps {
   data: ExpenseData;
@@ -26,10 +27,11 @@ export default function Dashboard({ data }: DashboardProps) {
     selectedCategories: EXPENSE_CATEGORIES.map((c) => c.key),
     yearStart: data.yearRange[0],
     yearEnd: data.yearRange[1],
-    selectedMember: null,
+    selectedMembers: [],
   });
 
-  // Apply filters to records
+  // Apply filters to records — DON'T filter by selectedMembers here
+  // so the aggregate charts still show full data context
   const filteredRecords = useMemo(() => {
     return data.records.filter((r: ExpenseRecord) => {
       // Data source filter
@@ -46,10 +48,6 @@ export default function Dashboard({ data }: DashboardProps) {
 
       // Year filter
       if (r.year < filters.yearStart || r.year > filters.yearEnd)
-        return false;
-
-      // Member filter
-      if (filters.selectedMember && r.name !== filters.selectedMember)
         return false;
 
       return true;
@@ -106,16 +104,32 @@ export default function Dashboard({ data }: DashboardProps) {
     };
   }, [filteredRecords, filters.selectedCategories]);
 
-  const handleSelectMember = useCallback(
-    (name: string) => {
-      setFilters((prev) => ({ ...prev, selectedMember: name }));
-    },
-    []
-  );
+  const handleSelectMember = useCallback((name: string) => {
+    setFilters((prev) => {
+      if (prev.selectedMembers.includes(name)) return prev;
+      return { ...prev, selectedMembers: [...prev.selectedMembers, name] };
+    });
+  }, []);
 
-  const selectedMemberInfo = filters.selectedMember
-    ? data.members.find((m) => m.name === filters.selectedMember) || null
-    : null;
+  const handleRemoveMember = useCallback((name: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      selectedMembers: prev.selectedMembers.filter((n) => n !== name),
+    }));
+  }, []);
+
+  const handleClearMembers = useCallback(() => {
+    setFilters((prev) => ({ ...prev, selectedMembers: [] }));
+  }, []);
+
+  // Resolved member info objects for selected members
+  const selectedMemberInfos = useMemo(
+    () =>
+      filters.selectedMembers
+        .map((name) => data.members.find((m) => m.name === name))
+        .filter(Boolean) as typeof data.members,
+    [filters.selectedMembers, data.members]
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -179,16 +193,26 @@ export default function Dashboard({ data }: DashboardProps) {
             </div>
           </div>
 
-          {/* Member Detail (when selected) */}
-          {selectedMemberInfo && (
+          {/* Single Member Detail (1 selected — timeline + donut) */}
+          {selectedMemberInfos.length === 1 && (
             <MemberDetailChart
               records={filteredRecords}
               categories={filters.selectedCategories}
-              member={selectedMemberInfo}
+              member={selectedMemberInfos[0]}
               quarters={filteredQuarters}
-              onClose={() =>
-                setFilters((prev) => ({ ...prev, selectedMember: null }))
-              }
+              onClose={handleClearMembers}
+            />
+          )}
+
+          {/* Multi-Member Comparison (2+ selected — overlaid lines) */}
+          {selectedMemberInfos.length >= 2 && (
+            <MemberCompareChart
+              records={filteredRecords}
+              categories={filters.selectedCategories}
+              members={selectedMemberInfos}
+              quarters={filteredQuarters}
+              onRemoveMember={handleRemoveMember}
+              onClearAll={handleClearMembers}
             />
           )}
 

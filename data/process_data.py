@@ -65,7 +65,7 @@ def process_file(path, year, quarter, is_minister=False):
         
         for i in range(min(10, len(df))):
             row_vals = [str(x).lower().strip() for x in df.iloc[i].fillna('')]
-            if any('party' in x or 'parties' in x for x in row_vals) and any('member' in x or 'name' in x or 'minister' in x for x in row_vals):
+            if any('wellington' in x or 'accommodation' in x or 'air travel' in x for x in row_vals) and any('member' in x or 'name' in x or 'minister' in x for x in row_vals):
                 header_row_idx = i
                 break
                 
@@ -106,27 +106,37 @@ def process_file(path, year, quarter, is_minister=False):
                 continue # skip header rows
                 
             row = [str(x).strip() for x in df.iloc[i].fillna('')]
-            if len(row) <= max(col_mappings['wellington'], col_mappings['air']):
-                continue
             
-            p = row[col_mappings['party']]
-            if p:
-                current_party = normalize_party(p)
-                
-            # If no party is explicitly specified and we don't have a tracked one, keep going.
-            if not p and current_party == 'Unknown':
+            p = row[col_mappings['party']] if col_mappings['party'] < len(row) else ''
+            n = row[col_mappings['name']] if col_mappings['name'] < len(row) else ''
+            
+            # Identify party from either the party column or the name column
+            np = normalize_party(p)
+            nn = normalize_party(n)
+            
+            if p and np != 'Unknown':
+                current_party = np
+            elif n and nn != 'Unknown' and 'total' not in n.lower():
+                current_party = nn
+            
+            if len(row) <= max(col_mappings['wellington'], col_mappings['air']):
                 continue
                 
             norm_party = current_party
-            if norm_party != 'Unknown' or p.lower().startswith('ind'): # Basic check that it is a data row
-                name = row[col_mappings['name']].title()
-                if not name or 'total' in name.lower() or 'party' in name.lower():
+            # Only process rows that have a valid party tracking and aren't just party header rows
+            if norm_party != 'Unknown' or p.lower().startswith('ind'):
+                name = n.title()
+                if not name or 'total' in name.lower() or 'party' in name.lower() or normalize_party(n) != 'Unknown':
                     continue
 
-                well = clean_currency(row[col_mappings['wellington']])
-                other = clean_currency(row[col_mappings['other']])
-                air = clean_currency(row[col_mappings['air']])
-                surf = clean_currency(row[col_mappings['surface']])
+                well = clean_currency(row[col_mappings['wellington']] if col_mappings['wellington'] < len(row) else 0)
+                other = clean_currency(row[col_mappings['other']] if col_mappings['other'] < len(row) else 0)
+                air = clean_currency(row[col_mappings['air']] if col_mappings['air'] < len(row) else 0)
+                surf = clean_currency(row[col_mappings['surface']] if col_mappings['surface'] < len(row) else 0)
+                
+                intl = 0.0
+                if col_mappings['international'] != -1 and col_mappings['international'] < len(row):
+                    intl = clean_currency(row[col_mappings['international']])
                 
                 record = {
                     'year': year,
@@ -137,15 +147,11 @@ def process_file(path, year, quarter, is_minister=False):
                     'other_accommodation': other,
                     'domestic_air_travel': air,
                     'surface_travel': surf,
-                    'total': well + other + air + surf
+                    'international_travel': intl,
+                    'total': well + other + air + surf + intl
                 }
                 
                 if is_minister:
-                    intl = 0.0
-                    if col_mappings['international'] < len(row):
-                        intl = clean_currency(row[col_mappings['international']])
-                    record['international_travel'] = intl
-                    record['total'] += intl
                     record['is_minister'] = True
                     
                 records.append(record)

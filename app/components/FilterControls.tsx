@@ -72,11 +72,13 @@ export default function FilterControls({
     onChange({ ...filters, selectedParties: [] });
   }, [filters, onChange]);
 
-  // Filter members for search
+  // Filter members for search (exclude already selected)
   const filteredMembers = searchQuery.trim()
     ? members
-        .filter((m) =>
-          m.name.toLowerCase().includes(searchQuery.toLowerCase())
+        .filter(
+          (m) =>
+            m.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+            !filters.selectedMembers.includes(m.name)
         )
         .slice(0, 20)
     : [];
@@ -273,12 +275,6 @@ export default function FilterControls({
             <div className="filter-section-label">Expense Categories</div>
             <div className="flex flex-wrap gap-1.5">
               {EXPENSE_CATEGORIES.map(({ key, label, color }) => {
-                // Only show international if minister or combined
-                if (
-                  key === "international_travel" &&
-                  filters.dataSource === "mp"
-                )
-                  return null;
                 return (
                   <button
                     key={key}

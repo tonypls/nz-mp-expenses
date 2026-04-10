@@ -33,6 +33,8 @@ function cleanName(name) {
   let n = name.replace(/\n/g, "").replace(/\r/g, "");
   // Remove footnote markers like (1), (2)(3), (1)(2), etc.
   n = n.replace(/\s*\(\d+\)(\(\d+\))*/g, "");
+  // Remove prefixes: Hon, Rt Hon, Dr, Sir, Dame
+  n = n.replace(/\b(?:Hon|Rt Hon|Right Hon|Dr|Sir|Dame)\.?\s+/gi, "");
   // Collapse multiple spaces
   n = n.replace(/\s+/g, " ").trim();
   return n;
@@ -76,7 +78,7 @@ const mpRecords = mpRaw.map((r) => ({
   other_accommodation: r.other_accommodation || 0,
   domestic_air_travel: r.domestic_air_travel || 0,
   surface_travel: r.surface_travel || 0,
-  international_travel: 0,
+  international_travel: r.international_travel || 0,
   total: r.total || 0,
   source: "mp",
 }));
@@ -117,7 +119,11 @@ function buildCanonicalMap(records) {
   const variants = new Map(); // key → Map<name, count>
   for (const r of records) {
     const n = r.name.replace(/\s?\*$/, "").trim(); // strip trailing asterisks
-    const key = n.toLowerCase().replace(/[^a-z]/g, "");
+    
+    // Normalize unicode to ascii, strip special characters, split into components, sort, and recombine
+    let asciiName = n.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const key = asciiName.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).sort().join("");
+    
     if (!variants.has(key)) variants.set(key, new Map());
     const counts = variants.get(key);
     counts.set(n, (counts.get(n) || 0) + 1);
