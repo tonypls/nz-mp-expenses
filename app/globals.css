@@ -756,16 +756,28 @@ body {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
-  flex: 1;
+  flex: 2;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
   overflow: hidden;
 }
 
+.spender-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.spender-name .party-tag {
+  flex-shrink: 0;
+}
+
 .spender-bar-container {
-  flex: 1;
+  flex: 0.6;
   height: 6px;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 3px;

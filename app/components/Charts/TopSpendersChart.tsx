@@ -68,7 +68,7 @@ export default function TopSpendersChart({
             >
               <span className="spender-rank">{i + 1}</span>
               <span className="spender-name">
-                {s.name}
+                <span>{s.name}</span>
                 <span className="party-tag" style={{ color: PARTY_COLORS[s.party] || "var(--text-muted)" }}>{s.party}</span>
               </span>
               <div className="spender-bar-container">
