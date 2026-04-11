@@ -176,14 +176,22 @@ export default function Dashboard({ data }: DashboardProps) {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="app-header px-4 py-4 md:px-6">
-        <div className="max-w-screen-2xl mx-auto flex items-start justify-between gap-3">
-          <div>
-            <h1 className="header-title">NZ Parliamentary Expenses</h1>
-            <p className="header-subtitle">
-              Transport & accommodation spending transparency ·{" "}
-              <span style={{ whiteSpace: "nowrap" }}>2008–2025</span>
-            </p>
+      <header className="app-header sticky top-0 z-40 px-4 py-3 md:px-6">
+        <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="header-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <path d="M8 21h8M12 17v4"/>
+                <path d="M6 8h4M6 11h6M6 14h3"/>
+              </svg>
+            </div>
+            <div>
+              <h1 className="header-title">NZ Parliamentary Expenses</h1>
+              <p className="header-subtitle">
+                Transport & accommodation · 2008–2025
+              </p>
+            </div>
           </div>
           <button
             onClick={handleShare}

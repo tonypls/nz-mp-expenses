@@ -390,7 +390,7 @@ export default function FilterControls({
     filters.selectedMembers.length;
 
   return (
-    <div className="filter-bar sticky top-0 z-40">
+    <div className="filter-bar">
       <div className="max-w-screen-2xl mx-auto">
         {/* ── Collapsible header (visible on mobile) ── */}
         <button
