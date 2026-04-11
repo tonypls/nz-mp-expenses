@@ -255,7 +255,10 @@ export default function Dashboard({ data }: DashboardProps) {
               <div className="stat-value">{stats.memberCount}</div>
               <div className="stat-label">Active Members</div>
             </div>
-            <div className="stat-card animate-fade-in stagger-4">
+            <div
+              className="stat-card animate-fade-in stagger-4 cursor-pointer"
+              onClick={() => stats.highestSpender.name !== "—" && handleSelectMember(stats.highestSpender.name)}
+            >
               <div
                 className="stat-value text-lg! font-semibold!"
                 style={{

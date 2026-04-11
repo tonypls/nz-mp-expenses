@@ -52,6 +52,7 @@ export default function MemberCompareChart({
       string,
       Map<string, number>
     >();
+    const mostRecentParty = new Map<string, string>();
 
     for (const m of members) {
       memberMap.set(m.name, new Map());
@@ -66,6 +67,7 @@ export default function MemberCompareChart({
         return acc + (showEmissions ? raw * (EMISSION_FACTORS[cat] || 0) / 1000 : raw);
       }, 0);
       mMap.set(key, (mMap.get(key) || 0) + sum);
+      if (r.party) mostRecentParty.set(r.name, r.party);
     }
 
     // Find quarters where at least one member has data
@@ -75,7 +77,7 @@ export default function MemberCompareChart({
 
     const memberData = members.map((m, i) => ({
       name: m.name,
-      party: m.parties[0],
+      party: mostRecentParty.get(m.name) ?? m.parties[m.parties.length - 1] ?? m.parties[0],
       color: COMPARE_COLORS[i % COMPARE_COLORS.length],
       data: activeQuarters.map((q) => ({
         quarter: q,
