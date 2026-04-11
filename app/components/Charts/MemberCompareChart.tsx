@@ -142,8 +142,9 @@ export default function MemberCompareChart({
       );
 
     const tooltip = d3.select(tooltipRef.current);
+    const fmt = (v: number) => showEmissions ? `${d3.format(",.2f")(v)} t` : `$${d3.format(",.0f")(v)}`;
 
-    // Draw lines for each member
+    // Draw lines for each member (no per-dot tooltip — handled by hover overlay)
     for (const member of memberData) {
       const filteredData = member.data.filter((d) => d.value > 0);
       if (filteredData.length === 0) continue;
@@ -162,7 +163,6 @@ export default function MemberCompareChart({
         .attr("stroke-opacity", 0.9)
         .attr("d", line);
 
-      // Dots
       g.selectAll(`.dot-${member.name.replace(/\W/g, "")}`)
         .data(filteredData)
         .join("circle")
@@ -172,22 +172,84 @@ export default function MemberCompareChart({
         .attr("fill", member.color)
         .attr("stroke", "var(--bg-card)")
         .attr("stroke-width", 2)
-        .on("mousemove", (event: MouseEvent, d) => {
-          tooltip
-            .style("opacity", 1)
-            .style("left", `${event.clientX + 14}px`)
-            .style("top", `${event.clientY - 14}px`)
-            .html(
-              `<div class="tooltip-title">${d.quarter}</div>
-              <div class="tooltip-row">
-                <span class="dot" style="background:${member.color}"></span>
-                <span class="label">${member.name}</span>
-                <span class="value">${showEmissions ? `${d3.format(",.2f")(d.value)} t` : `$${d3.format(",.0f")(d.value)}`}</span>
-              </div>`
-            );
-        })
-        .on("mouseleave", () => tooltip.style("opacity", 0));
+        .style("pointer-events", "none");
     }
+
+    // Hover overlay — snaps to nearest quarter, shows all members
+    const bisect = (mx: number) => {
+      const domain = x.domain();
+      let closest = domain[0];
+      let minDist = Infinity;
+      for (const q of domain) {
+        const dist = Math.abs((x(q) || 0) - mx);
+        if (dist < minDist) { minDist = dist; closest = q; }
+      }
+      return closest;
+    };
+
+    const showTooltip = (clientX: number, clientY: number, mx: number) => {
+      const quarter = bisect(mx);
+
+      g.selectAll(".hover-line").remove();
+      g.append("line")
+        .attr("class", "hover-line")
+        .attr("x1", x(quarter)!).attr("x2", x(quarter)!)
+        .attr("y1", 0).attr("y2", innerHeight)
+        .attr("stroke", "rgba(255,255,255,0.2)")
+        .attr("stroke-dasharray", "3,3");
+
+      const entries = memberData
+        .map((m) => ({ name: m.name, color: m.color, value: m.data.find((d) => d.quarter === quarter)?.value || 0 }))
+        .filter((e) => e.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+      if (entries.length === 0) return;
+
+      let html = `<div class="tooltip-title">${quarter}</div>`;
+      for (const e of entries) {
+        html += `<div class="tooltip-row">
+          <span class="dot" style="background:${e.color}"></span>
+          <span class="label">${e.name}</span>
+          <span class="value">${fmt(e.value)}</span>
+        </div>`;
+      }
+
+      tooltip.style("opacity", 1).html(html);
+      const el = tooltipRef.current!;
+      const left = Math.min(clientX + 16, window.innerWidth - el.offsetWidth - 8);
+      const top = clientY - el.offsetHeight - 8 >= 0 ? clientY - el.offsetHeight - 8 : clientY + 16;
+      tooltip.style("left", `${left}px`).style("top", `${top}px`);
+    };
+
+    const hideTooltip = () => {
+      g.selectAll(".hover-line").remove();
+      tooltip.style("opacity", 0);
+    };
+
+    g.append("rect")
+      .attr("width", innerWidth).attr("height", innerHeight)
+      .attr("fill", "transparent")
+      .on("mousemove", (event: MouseEvent) => {
+        const [mx] = d3.pointer(event);
+        showTooltip(event.clientX, event.clientY, mx);
+      })
+      .on("mouseleave", hideTooltip)
+      .on("touchstart", (event: TouchEvent) => {
+        event.preventDefault();
+        const t = event.touches[0];
+        if (!t || !svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        showTooltip(t.clientX, t.clientY, t.clientX - rect.left - margin.left);
+      })
+      .on("touchmove", (event: TouchEvent) => {
+        event.preventDefault();
+        const t = event.touches[0];
+        if (!t || !svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        showTooltip(t.clientX, t.clientY, t.clientX - rect.left - margin.left);
+      })
+      .on("touchend", hideTooltip)
+      .on("touchcancel", hideTooltip);
 
     // Axes
     const maxTicks = Math.max(4, Math.floor(width / 55));
@@ -221,6 +283,7 @@ export default function MemberCompareChart({
   }, [memberData, allQuarters, containerWidth, showEmissions]);
 
   return (
+    <>
     <div
       className="chart-container animate-fade-in"
       style={{ borderColor: "var(--border-active)" }}
@@ -285,7 +348,8 @@ export default function MemberCompareChart({
           <svg ref={svgRef} />
         </div>
       </div>
-      <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
     </div>
+    <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
+    </>
   );
 }

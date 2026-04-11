@@ -144,7 +144,7 @@ export default function MemberDetailChart({
         d3.axisLeft(y).ticks(4).tickSize(-innerWidth).tickFormat(() => "")
       );
 
-    // Lines
+    // Lines + dots (no per-dot tooltip — handled by hover overlay below)
     const tooltip = d3.select(tooltipRef.current);
 
     for (const cat of activeCats) {
@@ -161,7 +161,6 @@ export default function MemberDetailChart({
         .attr("stroke-width", 2)
         .attr("d", line as unknown as string);
 
-      // Dots
       g.selectAll(`.dot-${cat.key}`)
         .data(timelineData)
         .join("circle")
@@ -171,25 +170,87 @@ export default function MemberDetailChart({
         .attr("fill", cat.color)
         .attr("stroke", "var(--bg-card)")
         .attr("stroke-width", 1.5)
-        .on("mousemove", (event: MouseEvent, d) => {
-          const raw = ((d as unknown as Record<string, number>)[cat.key]) || 0;
-          const val = toDisplayVal(raw, cat.key);
-          const fmtVal = showEmissions ? `${d3.format(",.2f")(val)} t` : `$${d3.format(",.0f")(val)}`;
-          tooltip
-            .style("opacity", 1)
-            .style("left", `${event.clientX + 12}px`)
-            .style("top", `${event.clientY - 12}px`)
-            .html(
-              `<div class="tooltip-title">${d.quarter}</div>
-              <div class="tooltip-row">
-                <span class="dot" style="background:${cat.color}"></span>
-                <span class="label">${cat.label}</span>
-                <span class="value">${fmtVal}</span>
-              </div>`
-            );
-        })
-        .on("mouseleave", () => tooltip.style("opacity", 0));
+        .style("pointer-events", "none");
     }
+
+    // Hover overlay — snaps to nearest quarter, shows all categories
+    const bisect = (mx: number) => {
+      const domain = x.domain();
+      let closest = domain[0];
+      let minDist = Infinity;
+      for (const q of domain) {
+        const dist = Math.abs((x(q) || 0) - mx);
+        if (dist < minDist) { minDist = dist; closest = q; }
+      }
+      return closest;
+    };
+
+    const showTooltip = (clientX: number, clientY: number, mx: number) => {
+      const quarter = bisect(mx);
+      const datum = timelineData.find((d) => d.quarter === quarter);
+      if (!datum) return;
+
+      g.selectAll(".hover-line").remove();
+      g.append("line")
+        .attr("class", "hover-line")
+        .attr("x1", x(quarter)!).attr("x2", x(quarter)!)
+        .attr("y1", 0).attr("y2", innerHeight)
+        .attr("stroke", "rgba(255,255,255,0.2)")
+        .attr("stroke-dasharray", "3,3");
+
+      const fmt = (v: number) => showEmissions ? `${d3.format(",.2f")(v)} t` : `$${d3.format(",.0f")(v)}`;
+      const total = activeCats.reduce((s, c) => s + toDisplayVal(((datum as unknown as Record<string, number>)[c.key]) || 0, c.key), 0);
+
+      let html = `<div class="tooltip-title">${quarter}</div>`;
+      for (const cat of activeCats) {
+        const val = toDisplayVal(((datum as unknown as Record<string, number>)[cat.key]) || 0, cat.key);
+        html += `<div class="tooltip-row">
+          <span class="dot" style="background:${cat.color}"></span>
+          <span class="label">${cat.label}</span>
+          <span class="value">${fmt(val)}</span>
+        </div>`;
+      }
+      html += `<div class="tooltip-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:4px">
+        <span class="label" style="font-weight:600;color:var(--text-primary)">Total</span>
+        <span class="value" style="color:var(--accent-blue)">${fmt(total)}</span>
+      </div>`;
+
+      tooltip.style("opacity", 1).html(html);
+      const el = tooltipRef.current!;
+      const left = Math.min(clientX + 16, window.innerWidth - el.offsetWidth - 8);
+      const top = clientY - el.offsetHeight - 8 >= 0 ? clientY - el.offsetHeight - 8 : clientY + 16;
+      tooltip.style("left", `${left}px`).style("top", `${top}px`);
+    };
+
+    const hideTooltip = () => {
+      g.selectAll(".hover-line").remove();
+      tooltip.style("opacity", 0);
+    };
+
+    g.append("rect")
+      .attr("width", innerWidth).attr("height", innerHeight)
+      .attr("fill", "transparent")
+      .on("mousemove", (event: MouseEvent) => {
+        const [mx] = d3.pointer(event);
+        showTooltip(event.clientX, event.clientY, mx);
+      })
+      .on("mouseleave", hideTooltip)
+      .on("touchstart", (event: TouchEvent) => {
+        event.preventDefault();
+        const t = event.touches[0];
+        if (!t || !lineRef.current) return;
+        const rect = lineRef.current.getBoundingClientRect();
+        showTooltip(t.clientX, t.clientY, t.clientX - rect.left - margin.left);
+      })
+      .on("touchmove", (event: TouchEvent) => {
+        event.preventDefault();
+        const t = event.touches[0];
+        if (!t || !lineRef.current) return;
+        const rect = lineRef.current.getBoundingClientRect();
+        showTooltip(t.clientX, t.clientY, t.clientX - rect.left - margin.left);
+      })
+      .on("touchend", hideTooltip)
+      .on("touchcancel", hideTooltip);
 
     // Axes
     const maxTicks = Math.max(3, Math.floor(width / 60));
@@ -254,6 +315,9 @@ export default function MemberDetailChart({
       .padAngle(0.02)
       .cornerRadius(3);
 
+    const donutTooltip = d3.select(tooltipRef.current);
+    const fmt = (v: number) => showEmissions ? `${d3.format(",.2f")(v)} t` : `$${d3.format(",.0f")(v)}`;
+
     g.selectAll("path")
       .data(pie(categoryTotals))
       .join("path")
@@ -261,7 +325,29 @@ export default function MemberDetailChart({
       .attr("fill", (d) => d.data.color)
       .attr("opacity", 0.85)
       .attr("stroke", "var(--bg-card)")
-      .attr("stroke-width", 2);
+      .attr("stroke-width", 2)
+      .style("cursor", "default")
+      .on("mousemove", (event: MouseEvent, d) => {
+        const pct = ((d.data.value / grandTotal) * 100).toFixed(1);
+        donutTooltip
+          .style("opacity", 1)
+          .html(
+            `<div class="tooltip-row">
+              <span class="dot" style="background:${d.data.color}"></span>
+              <span class="label">${d.data.label}</span>
+              <span class="value">${fmt(d.data.value)}</span>
+            </div>
+            <div class="tooltip-row" style="margin-top:2px">
+              <span class="label" style="color:var(--text-muted)">Share</span>
+              <span class="value" style="color:var(--accent-blue)">${pct}%</span>
+            </div>`
+          );
+        const el = tooltipRef.current!;
+        const left = Math.min(event.clientX + 16, window.innerWidth - el.offsetWidth - 8);
+        const top = event.clientY - el.offsetHeight - 8 >= 0 ? event.clientY - el.offsetHeight - 8 : event.clientY + 16;
+        donutTooltip.style("left", `${left}px`).style("top", `${top}px`);
+      })
+      .on("mouseleave", () => donutTooltip.style("opacity", 0));
 
     // Center text
     g.append("text")
@@ -276,9 +362,10 @@ export default function MemberDetailChart({
           ? `${d3.format(".2s")(grandTotal)}t`
           : `$${d3.format(".3s")(grandTotal)}`
       );
-  }, [categoryTotals, grandTotal]);
+  }, [categoryTotals, grandTotal, showEmissions]);
 
   return (
+    <>
     <div className="chart-container animate-fade-in" style={{ borderColor: "var(--border-active)" }}>
       <div className="chart-header">
         <div>
@@ -329,7 +416,8 @@ export default function MemberDetailChart({
           </div>
         </div>
       </div>
-      <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
     </div>
+    <div ref={tooltipRef} className="chart-tooltip" style={{ opacity: 0 }} />
+    </>
   );
 }
