@@ -37,11 +37,20 @@ export const metadata: Metadata = {
     siteName: "NZ Parliamentary Expenses Explorer",
     locale: "en_NZ",
     type: "website",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "NZ Parliamentary Expenses — interactive transparency dashboard for New Zealand MP and Minister spending from 2008 to 2025.",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "NZ Parliamentary Expenses | Transparency Dashboard",
     description: "Explore New Zealand MP and Minister spending from 2008 to 2025 in this interactive dashboard.",
+    images: ["/opengraph-image.png"],
   },
 };
 
