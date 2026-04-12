@@ -194,9 +194,9 @@ function FilterIcon() {
 
 /* ─── Emissions Info Tooltip ─────────────────────────────────────── */
 const TRANSPORT_FACTORS: { key: string; label: string; color: string; factor: number }[] = [
-  { key: "domestic_air_travel",  label: "Domestic Air Travel",  color: "var(--cat-air)",           factor: 0.30 },
-  { key: "surface_travel",       label: "Surface Travel",       color: "var(--cat-surface)",        factor: 0.10 },
-  { key: "international_travel", label: "International Travel", color: "var(--cat-international)", factor: 0.40 },
+  { key: "domestic_air_travel",  label: "Domestic Air Travel",  color: "var(--cat-air)",           factor: 0.00078778 },
+  { key: "international_travel", label: "International Travel", color: "var(--cat-international)", factor: 0.00078778 },
+  { key: "surface_travel",       label: "Surface Travel",       color: "var(--cat-surface)",        factor: 0.00023017 },
 ];
 
 function EmissionsInfoTooltip() {
@@ -265,8 +265,7 @@ function EmissionsInfoTooltip() {
           </p>
           <p style={{ marginBottom: "8px" }}>
             Transport spending is converted to estimated CO₂e using spend-based
-            emission factors derived from NZ Ministry for the Environment 2024
-            emission factors and average NZ transport costs:
+            emission factors from Market Economics (2023), prepared for Auckland Council:
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "8px" }}>
             {TRANSPORT_FACTORS.map(({ key, label, color, factor }) => (
@@ -277,7 +276,7 @@ function EmissionsInfoTooltip() {
                 }} />
                 <span style={{ flex: 1, color: "var(--text-secondary)" }}>{label}</span>
                 <span style={{ fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-geist-mono), monospace" }}>
-                  {factor} kg CO₂e / NZD
+                  {factor} t CO₂e / NZD
                 </span>
               </div>
             ))}
