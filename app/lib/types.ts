@@ -63,14 +63,15 @@ export const PARTY_COLORS: Record<string, string> = {
   Independent: "var(--party-independent)",
 };
 
+// Source: Market Economics, "Consumption Emissions Modelling" (March 2023), prepared for Auckland Council.
+// https://www.knowledgeauckland.org.nz/media/2593/consumption-emissions-modelling-market-economics-march-2023.pdf
+// Factors are stored as kg CO2e per NZD (the display layer divides by 1000 to show tonnes).
 export const EMISSION_FACTORS: Partial<Record<ExpenseCategory, number>> = {
-  // kg CO2e per NZD spent
-  // Domestic: MfE 2024 NZ domestic aviation factor (~0.151 kgCO2e/pkm) at avg NZ airfare of ~$0.30/km
-  domestic_air_travel: 0.3,
-  // Surface: weighted blend of rental vehicles, taxis, and public transit
-  surface_travel: 0.1,
-  // International: MfE 2024 long-haul factor (~0.113 kgCO2e/pkm) at avg NZ international airfare of ~$0.12/km
-  international_travel: 0.4,
+  // Air travel (domestic & international): 0.00078778 t CO2e per NZD = 0.78778 kg CO2e per NZD
+  domestic_air_travel: 0.78778,
+  international_travel: 0.78778,
+  // Surface travel: 0.00023017 t CO2e per NZD = 0.23017 kg CO2e per NZD
+  surface_travel: 0.23017,
   // Accommodation categories omitted — no reliable spend-to-emission factor
 };
 
