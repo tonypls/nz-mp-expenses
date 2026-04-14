@@ -9,7 +9,8 @@ KNOWN_PARTIES = {
     'green': 'Green', 'greens': 'Green', 'green party': 'Green',
     'national': 'National', 'labour': 'Labour',
     'nz first': 'NZ First', 'new zealand first': 'NZ First', 'n z first': 'NZ First',
-    'te pati maori': 'Te Pāti Māori', 'maori': 'Te Pāti Māori', 'māori': 'Te Pāti Māori', 'maori party': 'Te Pāti Māori',
+    'te pati maori': 'Te Pāti Māori', 'te paati maori': 'Te Pāti Māori', 'te paati māori': 'Te Pāti Māori', 'te pāti māori': 'Te Pāti Māori',
+    'maori': 'Te Pāti Māori', 'māori': 'Te Pāti Māori', 'maori party': 'Te Pāti Māori',
     'united future': 'United Future', 'mana': 'Mana', 'mana party': 'Mana',
     'progressive': 'Progressive', 'alliance': 'Alliance', 
     'independent': 'Independent', 'speaker': 'Speaker'
