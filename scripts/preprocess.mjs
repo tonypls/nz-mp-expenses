@@ -33,6 +33,10 @@ function cleanName(name) {
   let n = name.replace(/\n/g, "").replace(/\r/g, "");
   // Remove footnote markers like (1), (2)(3), (1)(2), etc.
   n = n.replace(/\s*\(\d+\)(\(\d+\))*/g, "");
+  // Remove letter footnote markers like (A), (B), (D), etc.
+  n = n.replace(/\s*\([A-Z]\)/g, "");
+  // Remove trailing " MP" designation (e.g. "Simon Court MP", "John Hayes MP")
+  n = n.replace(/\s+MP\b/gi, "");
   // Remove prefixes: Hon, Rt Hon, Dr, Sir, Dame
   n = n.replace(/\b(?:Hon|Rt Hon|Right Hon|Dr|Sir|Dame)\.?\s+/gi, "");
   // Collapse multiple spaces
