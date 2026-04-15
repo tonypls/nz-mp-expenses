@@ -5,6 +5,18 @@ import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
 import { PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
 
+// NZ parliamentary terms (election year → next election year)
+const TERM_ORDER = ["2008–11", "2011–14", "2014–17", "2017–20", "2020–23", "2023–"];
+
+function getElectionTerm(year: number): string {
+  if (year <= 2011) return "2008–11";
+  if (year <= 2014) return "2011–14";
+  if (year <= 2017) return "2014–17";
+  if (year <= 2020) return "2017–20";
+  if (year <= 2023) return "2020–23";
+  return "2023–";
+}
+
 interface PartyBarChartProps {
   records: ExpenseRecord[];
   categories: ExpenseCategory[];
@@ -38,7 +50,15 @@ export default function PartyBarChart({
   const chartData = useMemo(() => {
     const partyData = new Map<
       string,
-      { total: number; memberCount: number; quarterRecords: number; perCapita: number }
+      {
+        total: number;
+        memberCount: number;
+        quarterRecords: number;
+        perCapita: number;
+        avgMpsPerQuarter: number;
+        mpsByTerm: Map<string, Set<string>>;
+        uniqueQuarters: Set<string>;
+      }
     >();
 
     const membersByParty = new Map<string, Set<string>>();
@@ -51,23 +71,37 @@ export default function PartyBarChart({
       }, 0);
 
       if (!partyData.has(r.party)) {
-        partyData.set(r.party, { total: 0, memberCount: 0, quarterRecords: 0, perCapita: 0 });
+        partyData.set(r.party, {
+          total: 0,
+          memberCount: 0,
+          quarterRecords: 0,
+          perCapita: 0,
+          avgMpsPerQuarter: 0,
+          mpsByTerm: new Map(),
+          uniqueQuarters: new Set(),
+        });
         membersByParty.set(r.party, new Set());
       }
       const d = partyData.get(r.party)!;
       d.total += sum;
       d.quarterRecords += 1;
+      d.uniqueQuarters.add(`${r.year}-${r.quarter}`);
       membersByParty.get(r.party)!.add(r.name);
+
+      // Track unique MPs per parliamentary term
+      const term = getElectionTerm(r.year);
+      if (!d.mpsByTerm.has(term)) d.mpsByTerm.set(term, new Set());
+      d.mpsByTerm.get(term)!.add(r.name);
     }
 
-    // perCapita = avg spend per member per quarter
     for (const [party, data] of partyData) {
       data.memberCount = membersByParty.get(party)?.size || 1;
       data.perCapita = data.total / (data.quarterRecords || 1);
+      // Average MPs per quarter = total member-quarters / unique quarters
+      data.avgMpsPerQuarter = data.quarterRecords / (data.uniqueQuarters.size || 1);
     }
 
-    return [...partyData.entries()]
-      .map(([party, data]) => ({ party, ...data }));
+    return [...partyData.entries()].map(([party, data]) => ({ party, ...data }));
   }, [records, categories, parties, showEmissions]);
 
   useEffect(() => {
@@ -82,7 +116,7 @@ export default function PartyBarChart({
 
     const width = containerWidth;
     const isMobile = width < 500;
-    const barHeight = isMobile ? 26 : 32;
+    const barHeight = isMobile ? 28 : 38;
     const gap = 6;
     const height = Math.max(200, sorted.length * (barHeight + gap) + 40);
     const margin = {
@@ -137,13 +171,15 @@ export default function PartyBarChart({
       .ease(d3.easeCubicOut)
       .attr("width", (d) => x(getValue(d)));
 
-    // Party labels — truncate if narrow
+    // Party name labels
     const maxLabelChars = isMobile ? 15 : 20;
     g.selectAll(".party-label")
       .data(sorted)
       .join("text")
       .attr("x", -8)
-      .attr("y", (d) => (y(d.party) || 0) + y.bandwidth() / 2)
+      .attr("y", (d) =>
+        (y(d.party) || 0) + (isMobile ? y.bandwidth() / 2 : y.bandwidth() / 2 - 7)
+      )
       .attr("text-anchor", "end")
       .attr("dominant-baseline", "middle")
       .attr("fill", "var(--text-secondary)")
@@ -154,6 +190,20 @@ export default function PartyBarChart({
           ? d.party.slice(0, maxLabelChars - 1) + "…"
           : d.party
       );
+
+    // Sub-label: avg MPs per quarter (desktop only)
+    if (!isMobile) {
+      g.selectAll(".party-mp-count")
+        .data(sorted)
+        .join("text")
+        .attr("x", -8)
+        .attr("y", (d) => (y(d.party) || 0) + y.bandwidth() / 2 + 8)
+        .attr("text-anchor", "end")
+        .attr("dominant-baseline", "middle")
+        .attr("fill", "var(--text-muted)")
+        .style("font-size", "10px")
+        .text((d) => `avg ${Math.round(d.avgMpsPerQuarter)} MPs`);
+    }
 
     // Value labels
     g.selectAll(".value-label")
@@ -171,7 +221,7 @@ export default function PartyBarChart({
           : `$${d3.format(".2s")(getValue(d))}`
       );
 
-    // Hover
+    // Hover targets
     g.selectAll(".bar-hover")
       .data(sorted)
       .join("rect")
@@ -181,6 +231,18 @@ export default function PartyBarChart({
       .attr("height", y.bandwidth())
       .attr("fill", "transparent")
       .on("mousemove", (event: MouseEvent, d) => {
+        // MPs per parliamentary term — only show terms present in data
+        const termRows = TERM_ORDER.filter((term) => d.mpsByTerm.has(term))
+          .map((term) => {
+            const count = d.mpsByTerm.get(term)!.size;
+            return `<div class="tooltip-row"><span class="label">${term}</span><span class="value">${count} MP${count !== 1 ? "s" : ""}</span></div>`;
+          })
+          .join("");
+
+        const termSection = termRows
+          ? `<div class="tooltip-divider">MPs by parliamentary term</div>${termRows}`
+          : "";
+
         tooltip
           .style("opacity", 1)
           .style("left", `${event.clientX + 16}px`)
@@ -189,12 +251,12 @@ export default function PartyBarChart({
             showEmissions
               ? `<div class="tooltip-title">${d.party}</div>
                 <div class="tooltip-row"><span class="label">Total CO₂e</span><span class="value">${d3.format(",.1f")(d.total)} t</span></div>
-                <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
-                <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">${d3.format(",.2f")(d.perCapita)} t</span></div>`
+                <div class="tooltip-row"><span class="label">Avg per MP / Qtr</span><span class="value" style="color:var(--accent-blue)">${d3.format(",.2f")(d.perCapita)} t</span></div>
+                ${termSection}`
               : `<div class="tooltip-title">${d.party}</div>
                 <div class="tooltip-row"><span class="label">Total Spend</span><span class="value">$${d3.format(",.0f")(d.total)}</span></div>
-                <div class="tooltip-row"><span class="label">Members</span><span class="value">${d.memberCount}</span></div>
-                <div class="tooltip-row"><span class="label">Avg / Member / Qtr</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>`
+                <div class="tooltip-row"><span class="label">Avg per MP / Qtr</span><span class="value" style="color:var(--accent-blue)">$${d3.format(",.0f")(d.perCapita)}</span></div>
+                ${termSection}`
           );
       })
       .on("mouseleave", () => {
@@ -213,10 +275,10 @@ export default function PartyBarChart({
             <p className="chart-subtitle">
               {showEmissions
                 ? mode === "perMember"
-                  ? "Average CO₂e per member per quarter (tonnes)"
+                  ? "Average CO₂e per MP per quarter — normalised for party size"
                   : "Total estimated CO₂e across all members in the selected period"
                 : mode === "perMember"
-                  ? "Average spend per member per quarter"
+                  ? "Average spend per MP per quarter — normalised for party size"
                   : "Total spend across all members in the selected period"}
             </p>
           </div>
@@ -225,7 +287,7 @@ export default function PartyBarChart({
               className={`toggle-btn ${mode === "perMember" ? "active" : ""}`}
               onClick={() => setMode("perMember")}
             >
-              Avg / Quarter
+              Per MP / Qtr
             </button>
             <button
               className={`toggle-btn ${mode === "total" ? "active" : ""}`}
