@@ -37,6 +37,11 @@ function cleanName(name) {
   n = n.replace(/\s*\([A-Z]\)/g, "");
   // Remove trailing " MP" designation (e.g. "Simon Court MP", "John Hayes MP")
   n = n.replace(/\s+MP\b/gi, "");
+  // Strip trailing month-range markers like " - Dec" or " - Oct & Nov"
+  n = n.replace(
+    /\s+-\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:\s+&\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))?$/i,
+    ""
+  );
   // Remove prefixes: Hon, Rt Hon, Dr, Sir, Dame
   n = n.replace(/\b(?:Hon|Rt Hon|Right Hon|Dr|Sir|Dame)\.?\s+/gi, "");
   // Collapse multiple spaces
@@ -89,11 +94,16 @@ const mpRecords = mpRaw.map((r) => ({
 
 // ─── Process Minister records ───────────────────────────────────────────
 
-// Filter out bad records where name is numeric
+// Filter out bad records where the "name" field is actually a PDF footer/note.
+// Real names: ≤4 tokens, no sentence-like function words.
+const JUNK_NAME_TOKENS = /\b(?:the|and|of|for|are|were|include|includes|excludes|figures|figure|these|this|relate|relates|quarter|quarters|executive|members|ministers|notes?|gst|invoices?|reimbursement|prior|residual|timing|approximately)\b/i;
 const validMinRecords = minRaw.filter((r) => {
   if (!r.name) return false;
-  // Check if name starts with a digit (aggregate rows)
-  return !/^\d/.test(r.name.trim());
+  const n = r.name.trim();
+  if (/^\d/.test(n)) return false;
+  if (n.split(/\s+/).length > 4) return false;
+  if (JUNK_NAME_TOKENS.test(n)) return false;
+  return true;
 });
 
 console.log(
@@ -154,15 +164,25 @@ for (const [from, to] of [...nameFixups.entries()].slice(0, 10)) {
   console.log(`  "${from}" → "${to}"`);
 }
 
-// Apply fixups
-for (const r of mpRecords) {
-  r.name = r.name.replace(/\s?\*$/, "").trim();
-  if (nameFixups.has(r.name)) r.name = nameFixups.get(r.name);
+// Manual aliases: cases the canonical-bucket heuristic can't resolve
+// (reversed "Last First" with no comma, truncations, spelling/OCR variants
+// where the more-frequent form is not the official spelling).
+const manualAliases = new Map([
+  ["Horan Brendan", "Brendan Horan"],
+  ["Anahila Kanongata'A", "Anahila Kanongata'A-Suisuiki"],
+  ["Angie Warren-Clarke", "Angie Warren-Clark"],
+  ["Peseta Sam Lotu-Liga", "Peseta Sam Lotu-Iiga"],
+]);
+
+function applyFixups(name) {
+  let n = name.replace(/\s?\*$/, "").trim();
+  if (nameFixups.has(n)) n = nameFixups.get(n);
+  if (manualAliases.has(n)) n = manualAliases.get(n);
+  return n;
 }
-for (const r of ministerRecords) {
-  r.name = r.name.replace(/\s?\*$/, "").trim();
-  if (nameFixups.has(r.name)) r.name = nameFixups.get(r.name);
-}
+
+for (const r of mpRecords) r.name = applyFixups(r.name);
+for (const r of ministerRecords) r.name = applyFixups(r.name);
 
 // ─── Build member metadata ──────────────────────────────────────────────
 

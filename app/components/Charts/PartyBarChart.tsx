@@ -4,18 +4,11 @@ import { useRef, useEffect, useMemo, useState } from "react";
 import * as d3 from "d3";
 import type { ExpenseRecord, ExpenseCategory } from "../../lib/types";
 import { PARTY_COLORS, EMISSION_FACTORS } from "../../lib/types";
-
-// NZ parliamentary terms (election year → next election year)
-const TERM_ORDER = ["2008–11", "2011–14", "2014–17", "2017–20", "2020–23", "2023–"];
-
-function getElectionTerm(year: number): string {
-  if (year <= 2011) return "2008–11";
-  if (year <= 2014) return "2011–14";
-  if (year <= 2017) return "2014–17";
-  if (year <= 2020) return "2017–20";
-  if (year <= 2023) return "2020–23";
-  return "2023–";
-}
+import {
+  PARLIAMENT_TERMS,
+  TERM_ORDER,
+  getTermId,
+} from "../../lib/parliamentTerms";
 
 interface PartyBarChartProps {
   records: ExpenseRecord[];
@@ -56,7 +49,8 @@ export default function PartyBarChart({
         quarterRecords: number;
         perCapita: number;
         avgMpsPerQuarter: number;
-        mpsByTerm: Map<string, Set<string>>;
+        mpsByTermQuarter: Map<string, Map<string, Set<string>>>;
+        medianMpsByTerm: Map<string, number>;
         uniqueQuarters: Set<string>;
       }
     >();
@@ -77,7 +71,8 @@ export default function PartyBarChart({
           quarterRecords: 0,
           perCapita: 0,
           avgMpsPerQuarter: 0,
-          mpsByTerm: new Map(),
+          mpsByTermQuarter: new Map(),
+          medianMpsByTerm: new Map(),
           uniqueQuarters: new Set(),
         });
         membersByParty.set(r.party, new Set());
@@ -88,17 +83,27 @@ export default function PartyBarChart({
       d.uniqueQuarters.add(`${r.year}-${r.quarter}`);
       membersByParty.get(r.party)!.add(r.name);
 
-      // Track unique MPs per parliamentary term
-      const term = getElectionTerm(r.year);
-      if (!d.mpsByTerm.has(term)) d.mpsByTerm.set(term, new Set());
-      d.mpsByTerm.get(term)!.add(r.name);
+      const term = getTermId(r.year, r.quarter as "Q1" | "Q2" | "Q3" | "Q4");
+      const qKey = `${r.year}-${r.quarter}`;
+      if (!d.mpsByTermQuarter.has(term)) d.mpsByTermQuarter.set(term, new Map());
+      const termQuarters = d.mpsByTermQuarter.get(term)!;
+      if (!termQuarters.has(qKey)) termQuarters.set(qKey, new Set());
+      termQuarters.get(qKey)!.add(r.name);
     }
 
     for (const [party, data] of partyData) {
       data.memberCount = membersByParty.get(party)?.size || 1;
       data.perCapita = data.total / (data.quarterRecords || 1);
-      // Average MPs per quarter = total member-quarters / unique quarters
       data.avgMpsPerQuarter = data.quarterRecords / (data.uniqueQuarters.size || 1);
+
+      for (const [term, quarters] of data.mpsByTermQuarter) {
+        const counts = [...quarters.values()].map((s) => s.size).sort((a, b) => a - b);
+        const mid = Math.floor(counts.length / 2);
+        const median = counts.length % 2 === 0
+          ? (counts[mid - 1] + counts[mid]) / 2
+          : counts[mid];
+        data.medianMpsByTerm.set(term, Math.round(median));
+      }
     }
 
     return [...partyData.entries()].map(([party, data]) => ({ party, ...data }));
@@ -231,17 +236,29 @@ export default function PartyBarChart({
       .attr("height", y.bandwidth())
       .attr("fill", "transparent")
       .on("mousemove", (event: MouseEvent, d) => {
-        // MPs per parliamentary term — only show terms present in data
-        const termRows = TERM_ORDER.filter((term) => d.mpsByTerm.has(term))
+        const seatsRows = PARLIAMENT_TERMS.filter(
+          (t) => (t.partyComposition[d.party] ?? 0) > 0
+        )
+          .map((t) => {
+            const seats = t.partyComposition[d.party];
+            return `<div class="tooltip-row"><span class="label">${t.id}</span><span class="value">${seats} seat${seats !== 1 ? "s" : ""}</span></div>`;
+          })
+          .join("");
+
+        const recordsRows = TERM_ORDER.filter((term) => d.medianMpsByTerm.has(term))
           .map((term) => {
-            const count = d.mpsByTerm.get(term)!.size;
+            const count = d.medianMpsByTerm.get(term)!;
             return `<div class="tooltip-row"><span class="label">${term}</span><span class="value">${count} MP${count !== 1 ? "s" : ""}</span></div>`;
           })
           .join("");
 
-        const termSection = termRows
-          ? `<div class="tooltip-divider">MPs by parliamentary term</div>${termRows}`
+        const seatsSection = seatsRows
+          ? `<div class="tooltip-divider">Seats won (official)</div>${seatsRows}`
           : "";
+        const recordsSection = recordsRows
+          ? `<div class="tooltip-divider">Median MPs per quarter</div>${recordsRows}`
+          : "";
+        const termSection = `${seatsSection}${recordsSection}`;
 
         tooltip
           .style("opacity", 1)
