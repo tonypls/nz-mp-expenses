@@ -1,6 +1,6 @@
 # NZ Parliamentary Expenses
 
-An interactive transparency dashboard for New Zealand Members of Parliament and Ministers' expense data, covering quarterly returns from 2008 to 2025.
+An interactive transparency dashboard for New Zealand Members of Parliament and Ministers' expense data, covering quarterly returns from 2008 onwards.
 
 **Live site:** https://mpexpenses.nz
 
